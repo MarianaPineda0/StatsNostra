@@ -6,8 +6,10 @@ class MetodoOverrideMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "http" and scope["method"] == "POST" and scope["path"].startswith(
-            "/query"
+        if (
+            scope["type"] == "http"
+            and scope["method"] == "POST"
+            and scope["path"].startswith("/query")
         ):
             headers = dict(scope["headers"])
             override = headers.get(b"x-http-method-override", b"").decode().upper()
