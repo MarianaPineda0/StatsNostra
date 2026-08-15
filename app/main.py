@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import apostadores, partidos, predicciones
+from app.api.routes import apostadores, consultas, partidos, predicciones
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 
@@ -12,6 +12,7 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 app.include_router(apostadores.router)
 app.include_router(partidos.router)
 app.include_router(predicciones.router)
+app.include_router(consultas.router)
 
 
 @app.exception_handler(RecursoNoEncontrado)
@@ -32,3 +33,10 @@ def manejar_regla_negocio(request: Request, exc: ReglaDeNegocioViolada) -> JSONR
 @app.get("/health", tags=["health"])
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Endpoint temporal para verificar que Render deja pasar el metodo QUERY.
+# Se elimina una vez confirmado el resultado.
+@app.api_route("/diagnostico-query", methods=["QUERY"], tags=["diagnostico"])
+def diagnostico_query() -> dict[str, str]:
+    return {"metodo": "QUERY", "resultado": "ok"}
