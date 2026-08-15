@@ -20,5 +20,26 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build: .
+    container_name: statsnostra-api
+    restart: unless-stopped
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      ENTORNO: desarrollo
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+psycopg://statsnostra_pruebas:${PRUEBAS_DB_PASSWORD:-pruebas_local}@db:5432/statsnostra_pruebas
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   statsnostra_db_data:
