@@ -13,7 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - statsnostra_db_data:/var/lib/postgresql/data
-      - ./scripts/db/init-schemas.sh:/docker-entrypoint-initdb.d/init-schemas.sh:ro
+      - ./scripts/db/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-statsnostra}"]
       interval: 5s

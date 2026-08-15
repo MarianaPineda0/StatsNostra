@@ -9,7 +9,9 @@ class Settings(BaseSettings):
 
     # Identifica el ambiente activo para logs y comportamiento condicional
     entorno: str = "desarrollo"
-    database_url: str = "postgresql+psycopg://statsnostra:statsnostra@localhost:5432/statsnostra"
+    database_url: str = (
+        "postgresql+psycopg://statsnostra_pruebas:pruebas_local@localhost:5432/statsnostra_pruebas"
+    )
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
