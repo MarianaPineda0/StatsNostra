@@ -1,0 +1,26 @@
+# Entorno Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Variables de entorno con secretos reales
+.env
+
+# Cobertura y reportes de pruebas
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Editores e IDEs
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
