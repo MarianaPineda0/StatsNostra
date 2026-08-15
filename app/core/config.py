@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
 
+    # Identifica el ambiente activo para logs y comportamiento condicional
+    entorno: str = "desarrollo"
+    database_url: str = "postgresql+psycopg://statsnostra:statsnostra@localhost:5432/statsnostra"
+    log_level: str = "INFO"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
