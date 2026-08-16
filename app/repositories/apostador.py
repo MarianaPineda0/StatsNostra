@@ -21,9 +21,7 @@ class ApostadorRepository:
         return self.db.get(Apostador, apostador_id)
 
     def obtener_por_username(self, username: str) -> Apostador | None:
-        return self.db.scalars(
-            select(Apostador).where(Apostador.username == username)
-        ).first()
+        return self.db.scalars(select(Apostador).where(Apostador.username == username)).first()
 
     def obtener_por_email(self, email: str) -> Apostador | None:
         return self.db.scalars(select(Apostador).where(Apostador.email == email)).first()
