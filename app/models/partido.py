@@ -1,13 +1,17 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+if TYPE_CHECKING:
+    from app.models.prediccion import Prediccion
 
-class EstadoPartido(str, enum.Enum):
+
+class EstadoPartido(enum.StrEnum):
     PROGRAMADO = "PROGRAMADO"
     EN_JUEGO = "EN_JUEGO"
     FINALIZADO = "FINALIZADO"

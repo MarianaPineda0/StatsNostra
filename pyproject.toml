@@ -1,0 +1,14 @@
+[tool.black]
+line-length = 95
+target-version = ["py312"]
+extend-exclude = "migrations/versions"
+
+[tool.ruff]
+line-length = 95
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008: Depends(...) en valores por defecto es el patron oficial de FastAPI, no un bug.
+ignore = ["B008"]
