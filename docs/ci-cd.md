@@ -10,7 +10,13 @@ en el repositorio, sin necesidad de configurar un servicio externo).
 | Pipeline | Archivo | Se dispara con | Cobertura mínima |
 |---|---|---|---|
 | Pruebas | `.github/workflows/pruebas.yml` | push a `develop` | ≥ 60% |
-| Producción | `.github/workflows/produccion.yml` (pendiente) | push a `main` | ≥ 85% |
+| Producción | `.github/workflows/produccion.yml` | push a `main` | ≥ 85% |
+
+Ambos pipelines tienen exactamente la misma estructura (build, PostgreSQL
+efímero de CI, migraciones, pruebas + quality gate, lint, build de imagen,
+deploy) — la única diferencia es la rama que los dispara, el umbral de
+cobertura, y el Deploy Hook de destino
+(`RENDER_DEPLOY_HOOK_PRUEBAS` vs `RENDER_DEPLOY_HOOK_PRODUCCION`).
 
 ## Qué hace el pipeline de Pruebas, paso a paso
 
@@ -46,9 +52,10 @@ Render genera por servicio). Esa URL se guarda como un **GitHub Secret**
 el workflow la referencia como `${{ secrets.RENDER_DEPLOY_HOOK_PRUEBAS }}`,
 así que ni siquiera aparece en los logs del pipeline.
 
-## Pendiente
+## Estado de validación
 
-- Validar el pipeline con una ejecución real, incluyendo la prueba
-  deliberada de que un test fallido bloquea el despliegue.
-- Crear el pipeline equivalente para Producción (`produccion.yml`), con
-  cobertura ≥85% y su propio Deploy Hook (`RENDER_DEPLOY_HOOK_PRODUCCION`).
+- Pipeline de Pruebas: validado con una ejecución real, incluyendo la
+  prueba deliberada de que un test fallido bloquea el despliegue (ver
+  `docs/pruebas.md`).
+- Pipeline de Producción: mismo mecanismo de bloqueo (`needs: test`),
+  aplicado sobre `main` con el gate de cobertura en ≥85%.

@@ -1,0 +1,60 @@
+name: Pipeline de Producción
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build, pruebas y quality gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: statsnostra
+          POSTGRES_PASSWORD: statsnostra
+          POSTGRES_DB: statsnostra_produccion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://statsnostra:statsnostra@localhost:5432/statsnostra_produccion
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build / instalación de dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Aplicar migraciones (Alembic) sobre PostgreSQL de CI
+        run: alembic upgrade head
+
+      - name: Ejecución de pruebas automatizadas + validación de cobertura (quality gate >=85%)
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+
+      - name: Lint (Ruff)
+        run: ruff check .
+
+      - name: Formato (Black)
+        run: black --check .
+
+      - name: Build de la imagen Docker
+        run: docker build -t statsnostra-api .
+
+  deploy:
+    name: Despliegue al ambiente correspondiente (Producción)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy en Render
+        run: curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_PRODUCCION }}"
