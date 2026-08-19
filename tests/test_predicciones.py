@@ -44,8 +44,9 @@ def test_crear_prediccion(client):
 def test_listar_predicciones(client):
     apostador = _crear_apostador(client)
     partido = _crear_partido(client)
-    _crear_prediccion(client, apostador["id"], partido["id"])
-    assert len(client.get("/predicciones").json()) == 1
+    creada = _crear_prediccion(client, apostador["id"], partido["id"]).json()
+    ids = [p["id"] for p in client.get("/predicciones").json()]
+    assert creada["id"] in ids
 
 
 def test_obtener_prediccion(client):

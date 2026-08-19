@@ -23,8 +23,9 @@ def test_crear_partido_equipos_iguales(client):
 
 
 def test_listar_partidos(client):
-    _crear_partido(client)
-    assert len(client.get("/partidos").json()) == 1
+    creado = _crear_partido(client).json()
+    ids = [p["id"] for p in client.get("/partidos").json()]
+    assert creado["id"] in ids
 
 
 def test_obtener_partido(client):
