@@ -7,7 +7,7 @@ from app.services.puntos import calcular_puntos
 def test_marcador_exacto_da_tres_puntos():
     acertada, puntos = calcular_puntos(2, 1, 2, 1)
     assert acertada is True
-    assert puntos == 999
+    assert puntos == 3
 
 
 def test_resultado_correcto_marcador_incorrecto_da_un_punto():
