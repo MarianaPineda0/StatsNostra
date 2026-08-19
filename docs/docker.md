@@ -1,6 +1,6 @@
-# Docker
+# 🐳 Docker
 
-## Qué se ejecuta
+## 📋 Qué se ejecuta
 
 `docker compose up --build` levanta dos servicios:
 
@@ -14,7 +14,7 @@ automáticamente. Dentro de esa red, `api` se conecta a la base de datos usando
 el nombre del servicio (`db`) como host — no `localhost`, porque `localhost`
 dentro de un contenedor se refiere al propio contenedor, no a otro.
 
-## Por qué un Dockerfile multi-stage
+## 📚 Por qué un Dockerfile multi-stage
 
 El `Dockerfile` tiene dos etapas:
 
@@ -28,28 +28,28 @@ El `Dockerfile` tiene dos etapas:
 Resultado: una imagen final más liviana, porque no arrastra nada que solo
 sirvió para el proceso de instalación.
 
-## Buenas prácticas aplicadas
+## ✅ Buenas prácticas aplicadas
 
-- **Usuario no root** (`appuser`): si alguien lograra ejecutar código dentro
+- 👤 **Usuario no root** (`appuser`): si alguien lograra ejecutar código dentro
   del contenedor, no tendría privilegios de administrador sobre el sistema
   de archivos del contenedor.
-- **`PYTHONDONTWRITEBYTECODE=1`**: evita que Python genere archivos `.pyc`
+- 🚫 **`PYTHONDONTWRITEBYTECODE=1`**: evita que Python genere archivos `.pyc`
   innecesarios dentro de la imagen.
-- **`PYTHONUNBUFFERED=1`**: los logs de la aplicación se escriben en tiempo
+- 📡 **`PYTHONUNBUFFERED=1`**: los logs de la aplicación se escriben en tiempo
   real, sin quedar retenidos en un buffer (importante para ver logs en vivo
   en Render o en `docker logs`).
-- **`.dockerignore`**: evita copiar archivos innecesarios o sensibles
+- 🙈 **`.dockerignore`**: evita copiar archivos innecesarios o sensibles
   (`.env`, `.git`, `tests/`, etc.) al contexto de construcción de la imagen.
-- **Migraciones automáticas**: el comando de arranque del servicio `api`
+- 🗃️ **Migraciones automáticas**: el comando de arranque del servicio `api`
   ejecuta `alembic upgrade head` antes de iniciar Uvicorn, así que un
   `docker compose up --build` desde cero deja la base de datos con las
   tablas ya creadas, sin pasos manuales adicionales.
-- **Health checks**: tanto `db` como `api` tienen verificación de salud
+- 💓 **Health checks**: tanto `db` como `api` tienen verificación de salud
   (`pg_isready` y una petición real a `/health`, respectivamente), lo que le
   permite a Docker Compose saber cuándo cada servicio está realmente listo
   para recibir tráfico (no solo "iniciado").
 
-## Verificación realizada
+## 🔬 Verificación realizada
 
 `docker compose down -v && docker compose up --build` desde cero:
 migraciones aplicadas automáticamente, escritura real a la base de datos
