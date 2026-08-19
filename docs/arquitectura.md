@@ -1,6 +1,6 @@
-# Arquitectura
+# 🏗️ Arquitectura
 
-## Capas y responsabilidad de cada una
+## 🧱 Capas y responsabilidad de cada una
 
 ```
 Peticion HTTP
@@ -26,7 +26,7 @@ importa `sqlalchemy` directamente; un repositorio nunca lanza una excepción
 de "regla de negocio violada". Esto permite, por ejemplo, cambiar de FastAPI
 a otro framework web sin tocar una sola línea de `services/` o `models/`.
 
-## Por qué esta separación (y no todo junto en la ruta)
+## 🤔 Por qué esta separación (y no todo junto en la ruta)
 
 Con tres entidades y reglas de negocio explícitas (7 reglas + sistema de
 puntos), meter todo en la función de la ruta habría mezclado validación
@@ -40,7 +40,7 @@ forma aislada y difícil de razonar. Separando:
 - Los repositorios se pueden auditar para SQL injection o queries
   ineficientes sin tener que leer reglas de negocio.
 
-## Entidades y relaciones
+## 📦 Entidades y relaciones
 
 ```
 Apostador (1) ──────< Prediccion >────── (1) Partido
@@ -59,7 +59,7 @@ SQLAlchemy y se materializan como constraints reales de PostgreSQL — no son
 solo validaciones de la aplicación que se podrían saltar con un INSERT
 directo.
 
-## El repositorio de consultas (`ConsultaRepository`/`ConsultaService`)
+## 🔍 El repositorio de consultas (`ConsultaRepository`/`ConsultaService`)
 
 No es una cuarta entidad — es una capa que compone lecturas sobre las tres
 tablas existentes (por ejemplo, el ranking hace un `JOIN` entre `Apostador`
@@ -67,7 +67,7 @@ y `Prediccion` con `GROUP BY`). Se separó de los repositorios/servicios de
 cada entidad porque estas consultas no pertenecen naturalmente a una sola
 tabla.
 
-## Capa de configuración (`app/core/`)
+## ⚙️ Capa de configuración (`app/core/`)
 
 - `config.py`: lee toda la configuración desde variables de entorno
   (`pydantic-settings`), nunca hardcodeada.
@@ -78,7 +78,7 @@ tabla.
 - `middleware.py`: el mecanismo de compatibilidad del verbo QUERY (ver
   [`docs/pruebas.md`](pruebas.md) para el porqué).
 
-## Inyección de dependencias
+## 🔌 Inyección de dependencias
 
 `app/api/dependencies.py` arma cada servicio con su(s) repositorio(s) y la
 sesión de base de datos de esa petición específica, usando el sistema de
