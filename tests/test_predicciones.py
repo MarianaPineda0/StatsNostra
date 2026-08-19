@@ -1,3 +1,8 @@
+# Pruebas del CRUD de Prediccion y de las 5 reglas de negocio: apostador
+# existente/activo, partido existente/no finalizado, sin predicciones
+# duplicadas (mismo apostador + mismo partido).
+
+
 def _crear_apostador(client, username="pred01", email="pred01@example.com", activo=True):
     creado = client.post(
         "/apostadores",

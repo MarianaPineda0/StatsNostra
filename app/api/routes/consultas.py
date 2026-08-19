@@ -6,6 +6,14 @@ from app.schemas.partido import PartidoRespuesta
 from app.schemas.prediccion import PrediccionRespuesta
 from app.services.consulta import ConsultaService
 
+# Estas rutas usan el verbo HTTP "QUERY" (no GET) via api_route(methods=["QUERY"]),
+# el metodo generico de FastAPI/Starlette para registrar cualquier verbo,
+# no solo los atajos usuales (@router.get, @router.post, etc.).
+#
+# Como Cloudflare (el borde de Render) bloquea metodos no estandar antes de
+# que lleguen a la app, MetodoOverrideMiddleware (app/core/middleware.py)
+# permite tambien invocarlas con POST + header X-HTTP-Method-Override: QUERY
+# sin cambiar nada aqui — el metodo real sigue siendo QUERY.
 router = APIRouter(prefix="/query", tags=["query"])
 
 

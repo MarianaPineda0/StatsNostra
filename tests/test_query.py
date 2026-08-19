@@ -1,3 +1,11 @@
+# Pruebas de los 6 endpoints QUERY (usando el verbo QUERY real, via
+# client.request("QUERY", ...)) y del mecanismo de compatibilidad por
+# POST + header X-HTTP-Method-Override (ver app/core/middleware.py).
+# Las aserciones verifican que el dato propio de cada prueba este presente
+# en el resultado, sin asumir que la tabla esta vacia (puede haber datos
+# de ejemplo sembrados con scripts/seed_data.py).
+
+
 def _crear_apostador(client, username="query01", email="query01@example.com"):
     return client.post(
         "/apostadores",

@@ -12,17 +12,25 @@ if TYPE_CHECKING:
 
 
 class EstadoPartido(enum.StrEnum):
+    # Ciclo de vida de un partido: solo se puede predecir en PROGRAMADO,
+    # y FINALIZADO es un estado terminal (no vuelve atras, ver
+    # PartidoService.finalizar)
     PROGRAMADO = "PROGRAMADO"
     EN_JUEGO = "EN_JUEGO"
     FINALIZADO = "FINALIZADO"
 
 
 class Partido(Base):
+    """Evento deportivo sobre el que los apostadores hacen predicciones."""
+
     __tablename__ = "partidos"
     __table_args__ = (
+        # Regla de negocio: un equipo no puede jugar contra si mismo
         CheckConstraint(
             "equipo_local <> equipo_visitante", name="ck_partido_equipos_distintos"
         ),
+        # Los resultados solo existen despues de finalizar (por eso permiten
+        # NULL), pero si tienen valor no pueden ser negativos
         CheckConstraint(
             "resultado_local IS NULL OR resultado_local >= 0",
             name="ck_partido_resultado_local_no_negativo",

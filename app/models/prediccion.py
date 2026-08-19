@@ -20,8 +20,12 @@ if TYPE_CHECKING:
 
 
 class Prediccion(Base):
+    """Pronostico de un apostador sobre el marcador de un partido."""
+
     __tablename__ = "predicciones"
     __table_args__ = (
+        # Un apostador solo puede predecir una vez por partido (regla de
+        # negocio reforzada a nivel de BD, no solo validada en el servicio)
         UniqueConstraint("apostador_id", "partido_id", name="uq_prediccion_apostador_partido"),
         CheckConstraint("goles_local_pred >= 0", name="ck_prediccion_goles_local_no_negativo"),
         CheckConstraint(
@@ -37,6 +41,8 @@ class Prediccion(Base):
     fecha_prediccion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Quedan en NULL mientras el partido no se finaliza; PartidoService.finalizar
+    # los calcula (ver app/services/puntos.py) y los deja fijos para siempre
     acertada: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     puntos: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

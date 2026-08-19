@@ -5,6 +5,8 @@ from app.models.prediccion import Prediccion
 
 
 class PrediccionRepository:
+    """Acceso a datos de Predicción. Sin reglas de negocio (eso va en el servicio)."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

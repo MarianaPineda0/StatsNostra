@@ -12,6 +12,10 @@ from app.services.partido import PartidoService
 from app.services.prediccion import PrediccionService
 
 
+# Fabricas de servicios para inyeccion de dependencias de FastAPI: cada
+# ruta pide `service: XService = Depends(get_x_service)` y recibe una
+# instancia ya armada con su repositorio (y la sesion de BD de esa
+# solicitud) sin tener que construirla a mano en cada endpoint.
 def get_apostador_service(db: Session = Depends(get_db)) -> ApostadorService:
     return ApostadorService(ApostadorRepository(db))
 

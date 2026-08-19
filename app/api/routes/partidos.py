@@ -9,6 +9,8 @@ from app.schemas.partido import (
 )
 from app.services.partido import PartidoService
 
+# CRUD de Partido, mas el endpoint /finalizar que cierra el partido y
+# dispara el calculo de puntos de todas sus predicciones (regla 7)
 router = APIRouter(prefix="/partidos", tags=["partidos"])
 
 

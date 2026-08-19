@@ -7,7 +7,12 @@ from app.models.prediccion import Prediccion
 
 
 class ConsultaRepository:
-    # Consultas de solo lectura que combinan las tablas existentes (no crea entidades nuevas)
+    """Consultas de solo lectura que combinan las tablas existentes.
+
+    No define ninguna entidad nueva: solo compone JOIN/GROUP BY sobre
+    Apostador, Partido y Prediccion para las lecturas del verbo QUERY.
+    """
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -24,10 +29,14 @@ class ConsultaRepository:
         return list(self.db.scalars(stmt).all())
 
     def ranking_apostadores(self):
+        # Suma condicional: cuenta 1 por cada prediccion realmente acertada
+        # (acertada=True), ignorando las fallidas (False) y las pendientes (NULL)
         aciertos = func.coalesce(
             func.sum(case((Prediccion.acertada.is_(True), 1), else_=0)), 0
         )
         puntos = func.coalesce(func.sum(Prediccion.puntos), 0)
+        # outerjoin (no join normal) para que un apostador sin predicciones
+        # todavia aparezca en el ranking con 0 puntos, en vez de desaparecer
         stmt = (
             select(
                 Apostador.id,

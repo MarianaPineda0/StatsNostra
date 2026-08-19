@@ -4,6 +4,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Configuracion de la app, leida de variables de entorno (o .env local).
+
+    Los valores por defecto de abajo son solo para desarrollo local con
+    Docker Compose; en Render se sobreescriben con las variables de entorno
+    reales de cada servicio (ver docs/render.md).
+    """
+
     app_name: str = "StatsNostra"
     app_version: str = "0.1.0"
 

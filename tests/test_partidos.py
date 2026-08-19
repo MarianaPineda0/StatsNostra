@@ -1,3 +1,7 @@
+# Pruebas del CRUD de Partido, la validacion de equipos/resultados, y la
+# finalizacion (incluyendo el bloqueo de finalizar dos veces, regla 6).
+
+
 def _crear_partido(client, local="Millonarios", visitante="Nacional"):
     return client.post(
         "/partidos",

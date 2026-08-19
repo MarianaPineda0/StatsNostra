@@ -9,6 +9,12 @@ from app.schemas.consulta import EstadisticasApostador, PosicionRanking
 
 
 class ConsultaService:
+    """Lecturas del verbo QUERY: combinan datos de varias entidades a la vez.
+
+    Se separa de los servicios de cada entidad porque estas consultas no
+    pertenecen a una sola tabla (ej. el ranking cruza Apostador y Prediccion).
+    """
+
     def __init__(
         self,
         consultas: ConsultaRepository,
@@ -51,6 +57,9 @@ class ConsultaService:
         )
 
     def ranking_apostadores(self) -> list[PosicionRanking]:
+        # El repositorio ya devuelve las filas ordenadas por puntos (SQL
+        # ORDER BY); aqui solo se les asigna la posicion 1, 2, 3... segun
+        # el orden en que llegan
         filas = self.consultas.ranking_apostadores()
         resultado = []
         for posicion, fila in enumerate(filas, start=1):

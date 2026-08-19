@@ -7,6 +7,8 @@ from app.services.puntos import calcular_puntos
 
 
 class PartidoService:
+    """Reglas de negocio de Partido, incluyendo el cierre de un partido."""
+
     def __init__(
         self, repositorio: PartidoRepository, predicciones: PrediccionRepository
     ) -> None:
@@ -47,6 +49,8 @@ class PartidoService:
         self.repositorio.eliminar(partido)
 
     def finalizar(self, partido_id: int, datos: PartidoFinalizar) -> Partido:
+        # Regla 6: un partido finalizado no puede volver a finalizarse
+        # (evita recalcular puntos dos veces sobre las mismas predicciones)
         partido = self.obtener(partido_id)
         if partido.estado == EstadoPartido.FINALIZADO:
             raise ReglaDeNegocioViolada("El partido ya fue finalizado")
@@ -55,6 +59,8 @@ class PartidoService:
         partido.resultado_visitante = datos.resultado_visitante
         partido.estado = EstadoPartido.FINALIZADO
 
+        # Regla 7: al finalizar se evaluan TODAS las predicciones de este
+        # partido de una vez, dejando acertada/puntos fijos permanentemente
         for prediccion in self.predicciones.listar_por_partido(partido_id):
             acertada, puntos = calcular_puntos(
                 prediccion.goles_local_pred,

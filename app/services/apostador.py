@@ -5,10 +5,14 @@ from app.schemas.apostador import ApostadorActualizar, ApostadorCrear
 
 
 class ApostadorService:
+    """Reglas de negocio de Apostador. Las rutas solo delegan aqui."""
+
     def __init__(self, repositorio: ApostadorRepository) -> None:
         self.repositorio = repositorio
 
     def crear(self, datos: ApostadorCrear) -> Apostador:
+        # Se valida antes del INSERT para devolver un 409 claro en vez de
+        # dejar que el constraint UNIQUE de la BD lance un error generico
         if self.repositorio.obtener_por_username(datos.username):
             raise ConflictoDeDatos(f"El username '{datos.username}' ya está en uso")
         if self.repositorio.obtener_por_email(datos.email):
