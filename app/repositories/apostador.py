@@ -5,6 +5,8 @@ from app.models.apostador import Apostador
 
 
 class ApostadorRepository:
+    """Acceso a datos de Apostador. Sin reglas de negocio (eso va en el servicio)."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

@@ -4,6 +4,8 @@ from app.api.dependencies import get_prediccion_service
 from app.schemas.prediccion import PrediccionActualizar, PrediccionCrear, PrediccionRespuesta
 from app.services.prediccion import PrediccionService
 
+# CRUD de Prediccion. Las 5 reglas de negocio (apostador activo, partido no
+# finalizado, sin duplicados, etc.) viven en PrediccionService, no aqui.
 router = APIRouter(prefix="/predicciones", tags=["predicciones"])
 
 

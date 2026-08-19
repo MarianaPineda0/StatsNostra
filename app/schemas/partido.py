@@ -13,6 +13,8 @@ class PartidoBase(BaseModel):
     equipo_visitante: str
     fecha_hora: datetime
 
+    # Validacion a nivel de API (devuelve 422 con mensaje claro); el mismo
+    # requisito tambien esta reforzado en la BD via CheckConstraint
     @model_validator(mode="after")
     def validar_equipos_distintos(self) -> Self:
         if self.equipo_local == self.equipo_visitante:
@@ -32,6 +34,8 @@ class PartidoActualizar(BaseModel):
     fecha_hora: datetime | None = None
 
 
+# Schema propio para POST /partidos/{id}/finalizar: solo pide el resultado,
+# no reutiliza PartidoActualizar porque son operaciones semanticamente distintas
 class PartidoFinalizar(BaseModel):
     resultado_local: int = Field(ge=0)
     resultado_visitante: int = Field(ge=0)

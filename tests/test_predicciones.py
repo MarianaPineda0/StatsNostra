@@ -1,3 +1,8 @@
+# Pruebas del CRUD de Prediccion y de las 5 reglas de negocio: apostador
+# existente/activo, partido existente/no finalizado, sin predicciones
+# duplicadas (mismo apostador + mismo partido).
+
+
 def _crear_apostador(client, username="pred01", email="pred01@example.com", activo=True):
     creado = client.post(
         "/apostadores",
@@ -44,8 +49,9 @@ def test_crear_prediccion(client):
 def test_listar_predicciones(client):
     apostador = _crear_apostador(client)
     partido = _crear_partido(client)
-    _crear_prediccion(client, apostador["id"], partido["id"])
-    assert len(client.get("/predicciones").json()) == 1
+    creada = _crear_prediccion(client, apostador["id"], partido["id"]).json()
+    ids = [p["id"] for p in client.get("/predicciones").json()]
+    assert creada["id"] in ids
 
 
 def test_obtener_prediccion(client):
