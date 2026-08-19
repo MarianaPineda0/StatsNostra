@@ -24,5 +24,6 @@ class PrediccionRespuesta(PrediccionBase):
 
     id: int
     fecha_prediccion: datetime
+    # None mientras el partido no se ha finalizado (ver Prediccion en models/)
     acertada: bool | None
     puntos: int | None

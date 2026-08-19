@@ -1,3 +1,7 @@
+# Pruebas del CRUD de Apostador: creacion, lectura, actualizacion,
+# eliminacion, y los dos casos de conflicto (username/email duplicado).
+
+
 def _crear_apostador(client, username="ana01", email="ana01@example.com"):
     return client.post(
         "/apostadores",

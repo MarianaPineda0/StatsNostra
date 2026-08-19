@@ -4,6 +4,8 @@ from app.api.dependencies import get_apostador_service
 from app.schemas.apostador import ApostadorActualizar, ApostadorCrear, ApostadorRespuesta
 from app.services.apostador import ApostadorService
 
+# CRUD de Apostador. Cada endpoint solo valida el request y delega en el
+# servicio (app/services/apostador.py) — no hay logica de negocio aqui.
 router = APIRouter(prefix="/apostadores", tags=["apostadores"])
 
 

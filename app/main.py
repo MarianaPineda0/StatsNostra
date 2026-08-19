@@ -18,6 +18,9 @@ app.include_router(predicciones.router)
 app.include_router(consultas.router)
 
 
+# Traduce las excepciones de dominio (levantadas en los servicios) a
+# codigos HTTP. Asi los servicios no dependen de FastAPI ni conocen codigos
+# HTTP — solo lanzan una excepcion con significado de negocio.
 @app.exception_handler(RecursoNoEncontrado)
 def manejar_no_encontrado(request: Request, exc: RecursoNoEncontrado) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})

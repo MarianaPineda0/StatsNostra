@@ -8,6 +8,8 @@ from app.schemas.prediccion import PrediccionActualizar, PrediccionCrear
 
 
 class PrediccionService:
+    """Reglas de negocio de Predicción (reglas 1-5 de la especificación)."""
+
     def __init__(
         self,
         repositorio: PrediccionRepository,
@@ -19,18 +21,25 @@ class PrediccionService:
         self.partidos = partidos
 
     def crear(self, datos: PrediccionCrear) -> Prediccion:
+        # Regla 2: el apostador debe existir
         apostador = self.apostadores.obtener_por_id(datos.apostador_id)
         if apostador is None:
             raise RecursoNoEncontrado(f"Apostador {datos.apostador_id} no encontrado")
+        # Regla 3: el apostador debe estar activo
         if not apostador.activo:
             raise ReglaDeNegocioViolada("El apostador no está activo")
 
+        # Regla 4: el partido debe existir
         partido = self.partidos.obtener_por_id(datos.partido_id)
         if partido is None:
             raise RecursoNoEncontrado(f"Partido {datos.partido_id} no encontrado")
+        # Regla 1: no se puede predecir un partido ya finalizado
         if partido.estado == EstadoPartido.FINALIZADO:
             raise ReglaDeNegocioViolada("No se puede predecir un partido finalizado")
 
+        # Regla 5: un apostador no puede tener dos predicciones para el
+        # mismo partido (tambien reforzado por el UNIQUE de la BD, pero se
+        # valida antes para devolver un 409 con mensaje claro)
         if self.repositorio.obtener_por_apostador_y_partido(
             datos.apostador_id, datos.partido_id
         ):

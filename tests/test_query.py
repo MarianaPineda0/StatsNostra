@@ -1,3 +1,11 @@
+# Pruebas de los 6 endpoints QUERY (usando el verbo QUERY real, via
+# client.request("QUERY", ...)) y del mecanismo de compatibilidad por
+# POST + header X-HTTP-Method-Override (ver app/core/middleware.py).
+# Las aserciones verifican que el dato propio de cada prueba este presente
+# en el resultado, sin asumir que la tabla esta vacia (puede haber datos
+# de ejemplo sembrados con scripts/seed_data.py).
+
+
 def _crear_apostador(client, username="query01", email="query01@example.com"):
     return client.post(
         "/apostadores",
@@ -84,9 +92,9 @@ def test_query_ranking(client):
     respuesta = client.request("QUERY", "/query/apostadores/ranking")
     assert respuesta.status_code == 200
     ranking = respuesta.json()
-    assert ranking[0]["apostador_id"] == apostador["id"]
-    assert ranking[0]["posicion"] == 1
-    assert ranking[0]["puntos_totales"] == 3
+    entrada = next(r for r in ranking if r["apostador_id"] == apostador["id"])
+    assert entrada["puntos_totales"] == 3
+    assert entrada["porcentaje_acierto"] == 100.0
 
 
 def test_query_partidos_finalizados(client):
@@ -98,18 +106,21 @@ def test_query_partidos_finalizados(client):
 
     respuesta = client.request("QUERY", "/query/partidos/finalizados")
     assert respuesta.status_code == 200
-    assert len(respuesta.json()) == 1
+    ids = [p["id"] for p in respuesta.json()]
+    assert partido["id"] in ids
 
 
 def test_query_partidos_con_filtro(client):
     _crear_partido(client, deporte="Futbol", liga="Liga X")
-    _crear_partido(client, deporte="Baloncesto", liga="Liga Y")
+    creado = _crear_partido(client, deporte="Baloncesto Test QUERY", liga="Liga Y")
 
-    respuesta = client.request("QUERY", "/query/partidos", params={"deporte": "Baloncesto"})
+    respuesta = client.request(
+        "QUERY", "/query/partidos", params={"deporte": "Baloncesto Test QUERY"}
+    )
     assert respuesta.status_code == 200
     resultados = respuesta.json()
-    assert len(resultados) == 1
-    assert resultados[0]["deporte"] == "Baloncesto"
+    assert all(r["deporte"] == "Baloncesto Test QUERY" for r in resultados)
+    assert creado["id"] in [r["id"] for r in resultados]
 
 
 def test_override_post_equivale_a_query(client):
@@ -124,7 +135,8 @@ def test_override_post_equivale_a_query(client):
         headers={"X-HTTP-Method-Override": "QUERY"},
     )
     assert respuesta.status_code == 200
-    assert len(respuesta.json()) == 1
+    ids = [p["id"] for p in respuesta.json()]
+    assert partido["id"] in ids
 
 
 def test_post_sin_override_no_es_valido(client):

@@ -5,6 +5,8 @@ from app.models.partido import Partido
 
 
 class PartidoRepository:
+    """Acceso a datos de Partido. Sin reglas de negocio (eso va en el servicio)."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

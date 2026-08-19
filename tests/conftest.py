@@ -1,3 +1,10 @@
+"""Fixtures compartidas: aislan cada test en una transaccion sobre la BD real.
+
+No se usa una base de datos mock ni SQLite en memoria — las pruebas corren
+contra PostgreSQL de verdad (la misma BD de desarrollo local), para que las
+constraints reales (UNIQUE, CHECK, FK) tambien queden validadas.
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
@@ -37,6 +44,9 @@ def db_session():
 
 @pytest.fixture()
 def client(db_session):
+    # Reemplaza la dependencia get_db real por una que entrega la sesion
+    # transaccional de arriba, para que las peticiones HTTP del test usen
+    # esa misma transaccion (y por lo tanto tambien se revierta al final)
     def _get_db_override():
         yield db_session
 

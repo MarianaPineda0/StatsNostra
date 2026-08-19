@@ -1,3 +1,6 @@
+# Pruebas unitarias puras del sistema de puntos (sin BD, sin HTTP): cubren
+# los 3 casos de la regla (exacto=3, resultado correcto=1, incorrecto=0)
+# y el caso especial de empate.
 from app.services.puntos import calcular_puntos
 
 

@@ -9,6 +9,9 @@ from app.db.base import Base
 
 config = context.config
 settings = get_settings()
+# Toma la URL de conexion de Settings (variables de entorno) en vez de leerla
+# de alembic.ini: asi "alembic upgrade head" usa la misma BD que la app,
+# sin tener que mantener la URL duplicada en dos archivos distintos.
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
@@ -17,6 +20,8 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+# Genera el SQL sin conectarse a la BD (util para revisar el script antes
+# de aplicarlo); no se usa en este proyecto, pero Alembic lo requiere definido.
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -29,6 +34,8 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# Camino real que usa este proyecto: se conecta a la BD y aplica las
+# migraciones pendientes directamente (lo que dispara "alembic upgrade head").
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
