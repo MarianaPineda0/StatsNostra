@@ -1,6 +1,6 @@
-# Render
+# ☁️ Render
 
-## Recursos desplegados
+## 📦 Recursos desplegados
 
 Un solo proyecto de Render ("StatsNostra"), con 3 recursos:
 
@@ -10,7 +10,7 @@ Un solo proyecto de Render ("StatsNostra"), con 3 recursos:
 | `statsnostra-produccion` | Web Service (Docker) | `main` | Free |
 | `statsnostra-db` | PostgreSQL | — (compartida) | Free |
 
-## Por qué una sola instancia de PostgreSQL para los dos ambientes
+## 🐘 Por qué una sola instancia de PostgreSQL para los dos ambientes
 
 El plan gratuito de Render permite **una sola instancia de PostgreSQL por
 workspace** (verificado en la documentación oficial de Render). Para
@@ -31,7 +31,7 @@ intento de `statsnostra_produccion` de conectarse a `statsnostra_pruebas`
 (o viceversa) es rechazado con `permission denied for database ... User
 does not have CONNECT privilege`.
 
-**Limitación aceptada conscientemente:** ambas bases comparten la misma
+⚠️ **Limitación aceptada conscientemente:** ambas bases comparten la misma
 instancia física. Si esa instancia entra en mantenimiento o falla, los dos
 ambientes se ven afectados a la vez — el aislamiento es de **datos y
 acceso**, no de infraestructura física. Es la mejor alternativa disponible
@@ -39,7 +39,7 @@ dentro de las restricciones del plan gratuito de Render (una sola instancia
 de Postgres por cuenta); la alternativa hubiera sido usar dos cuentas de
 Render distintas, descartada por complejidad operativa adicional.
 
-## Variables de entorno por servicio
+## 🔐 Variables de entorno por servicio
 
 Cada Web Service tiene su propio `DATABASE_URL` apuntando a su base
 correspondiente, configurado directamente en el dashboard de Render (nunca
@@ -50,7 +50,7 @@ statsnostra-pruebas:      DATABASE_URL -> statsnostra_pruebas
 statsnostra-produccion:   DATABASE_URL -> statsnostra_produccion
 ```
 
-## Despliegue
+## 🚀 Despliegue
 
 Cada Web Service usa el `Dockerfile` del repositorio (Render detecta
 automáticamente que es un proyecto Docker) — no un buildpack genérico. El
@@ -58,7 +58,7 @@ despliegue se dispara por un **Deploy Hook** (URL privada por servicio),
 llamado desde el pipeline de CI/CD correspondiente solo si las pruebas y el
 quality gate pasan (ver [`docs/ci-cd.md`](ci-cd.md)).
 
-## El método QUERY y Cloudflare
+## 🔍 El método QUERY y Cloudflare
 
 Render pone **Cloudflare** delante de todos sus servicios (verificado con
 evidencia: comparando los headers de una respuesta bloqueada contra una
@@ -75,11 +75,11 @@ QUERY real en el código, y además acepta `POST` con el header
 `X-HTTP-Method-Override: QUERY` como vía alterna para que la aplicación
 pública siga siendo 100% funcional a pesar de la restricción de la red.
 
-## Límites del plan gratuito considerados
+## ⏱️ Límites del plan gratuito considerados
 
-- **Web Services**: 750 horas de instancia/mes compartidas por workspace,
+- 🌐 **Web Services**: 750 horas de instancia/mes compartidas por workspace,
   se "duermen" tras 15 min de inactividad (~1 min para despertar).
-- **PostgreSQL**: 1 instancia por workspace, 1 GB de almacenamiento,
+- 🐘 **PostgreSQL**: 1 instancia por workspace, 1 GB de almacenamiento,
   expira 30 días después de creada (con 14 días de gracia).
 
 Ninguno de estos límites afecta la entrega del proyecto dentro del plazo
