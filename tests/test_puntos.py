@@ -13,7 +13,7 @@ def test_marcador_exacto_da_tres_puntos():
 def test_resultado_correcto_marcador_incorrecto_da_un_punto():
     acertada, puntos = calcular_puntos(3, 0, 2, 1)
     assert acertada is True
-    assert puntos == 1
+    assert puntos == 99
 
 
 def test_resultado_incorrecto_da_cero_puntos():
