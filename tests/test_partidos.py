@@ -49,6 +49,13 @@ def test_actualizar_partido(client):
     assert respuesta.json()["liga"] == "Liga Y"
 
 
+def test_actualizar_partido_con_patch(client):
+    creado = _crear_partido(client).json()
+    respuesta = client.patch(f"/partidos/{creado['id']}", json={"liga": "Liga Y"})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["liga"] == "Liga Y"
+
+
 def test_eliminar_partido(client):
     creado = _crear_partido(client).json()
     assert client.delete(f"/partidos/{creado['id']}").status_code == 204

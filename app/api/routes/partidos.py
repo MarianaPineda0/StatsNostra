@@ -36,6 +36,7 @@ def obtener_partido(
 
 
 @router.put("/{partido_id}", response_model=PartidoRespuesta)
+@router.patch("/{partido_id}", response_model=PartidoRespuesta)
 def actualizar_partido(
     partido_id: int,
     datos: PartidoActualizar,

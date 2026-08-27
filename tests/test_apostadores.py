@@ -43,6 +43,13 @@ def test_actualizar_apostador(client):
     assert respuesta.json()["nombre"] == "Ana Editada"
 
 
+def test_actualizar_apostador_con_patch(client):
+    creado = _crear_apostador(client).json()
+    respuesta = client.patch(f"/apostadores/{creado['id']}", json={"nombre": "Ana Editada"})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["nombre"] == "Ana Editada"
+
+
 def test_eliminar_apostador(client):
     creado = _crear_apostador(client).json()
     respuesta = client.delete(f"/apostadores/{creado['id']}")

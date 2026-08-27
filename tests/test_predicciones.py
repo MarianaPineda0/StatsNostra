@@ -74,6 +74,15 @@ def test_actualizar_prediccion(client):
     assert respuesta.json()["goles_local_pred"] == 3
 
 
+def test_actualizar_prediccion_con_patch(client):
+    apostador = _crear_apostador(client)
+    partido = _crear_partido(client)
+    creada = _crear_prediccion(client, apostador["id"], partido["id"]).json()
+    respuesta = client.patch(f"/predicciones/{creada['id']}", json={"goles_local_pred": 3})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["goles_local_pred"] == 3
+
+
 def test_eliminar_prediccion(client):
     apostador = _crear_apostador(client)
     partido = _crear_partido(client)
