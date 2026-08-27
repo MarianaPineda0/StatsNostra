@@ -31,6 +31,7 @@ def obtener_apostador(
 
 
 @router.put("/{apostador_id}", response_model=ApostadorRespuesta)
+@router.patch("/{apostador_id}", response_model=ApostadorRespuesta)
 def actualizar_apostador(
     apostador_id: int,
     datos: ApostadorActualizar,

@@ -31,6 +31,7 @@ def obtener_prediccion(
 
 
 @router.put("/{prediccion_id}", response_model=PrediccionRespuesta)
+@router.patch("/{prediccion_id}", response_model=PrediccionRespuesta)
 def actualizar_prediccion(
     prediccion_id: int,
     datos: PrediccionActualizar,

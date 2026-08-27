@@ -124,12 +124,14 @@ POST   /apostadores
 GET    /apostadores
 GET    /apostadores/{id}
 PUT    /apostadores/{id}
+PATCH  /apostadores/{id}
 DELETE /apostadores/{id}
 
 POST   /partidos
 GET    /partidos
 GET    /partidos/{id}
 PUT    /partidos/{id}
+PATCH  /partidos/{id}
 DELETE /partidos/{id}
 POST   /partidos/{id}/finalizar
 
@@ -137,8 +139,13 @@ POST   /predicciones
 GET    /predicciones
 GET    /predicciones/{id}
 PUT    /predicciones/{id}
+PATCH  /predicciones/{id}
 DELETE /predicciones/{id}
 ```
+
+PUT y PATCH usan el mismo handler y el mismo schema de actualización (todos los
+campos opcionales), así que ambos aceptan una actualización parcial —
+solo se distinguen por el verbo HTTP.
 
 ### 🔍 Método QUERY
 
