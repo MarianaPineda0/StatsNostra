@@ -8,6 +8,7 @@ env/
 
 # Variables de entorno con secretos reales
 .env
+.env.gcp
 
 # Cobertura y reportes de pruebas
 .coverage
