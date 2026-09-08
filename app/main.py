@@ -17,6 +17,14 @@ app.include_router(partidos.router)
 app.include_router(predicciones.router)
 app.include_router(consultas.router)
 
+# Alias /api/v1 de las mismas rutas de arriba (mismo router, sin logica
+# duplicada) para cumplir la convencion de versionado acordada con el
+# grupo en la Entrega 2, sin romper las rutas sin prefijo ya existentes.
+app.include_router(apostadores.router, prefix="/api/v1")
+app.include_router(partidos.router, prefix="/api/v1")
+app.include_router(predicciones.router, prefix="/api/v1")
+app.include_router(consultas.router, prefix="/api/v1")
+
 
 # Traduce las excepciones de dominio (levantadas en los servicios) a
 # codigos HTTP. Asi los servicios no dependen de FastAPI ni conocen codigos
