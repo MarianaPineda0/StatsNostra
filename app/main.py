@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import apostadores, consultas, partidos, predicciones
+from app.api.routes import apostadores, consultas, partidos, predicciones, predicciones_v2
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.core.middleware import MetodoOverrideMiddleware
@@ -24,6 +24,8 @@ app.include_router(apostadores.router, prefix="/api/v1")
 app.include_router(partidos.router, prefix="/api/v1")
 app.include_router(predicciones.router, prefix="/api/v1")
 app.include_router(consultas.router, prefix="/api/v1")
+
+app.include_router(predicciones_v2.router)
 
 
 # Traduce las excepciones de dominio (levantadas en los servicios) a
