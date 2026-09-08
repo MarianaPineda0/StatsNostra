@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     )
     log_level: str = "INFO"
 
+    # URLs de las APIs de los compañeros de grupo (Entrega 2, api/v2),
+    # identificadas por el nombre de su API, no de su autor. Vacias por
+    # defecto: si no estan configuradas, el cliente externo simplemente no
+    # llama a esa nube en vez de fallar.
+    trading_journal_api_url: str = ""
+    ecommerce_api_url: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
