@@ -10,6 +10,7 @@ from app.services.apostador import ApostadorService
 from app.services.consulta import ConsultaService
 from app.services.partido import PartidoService
 from app.services.prediccion import PrediccionService
+from app.services.prediccion_v2 import PrediccionV2Service
 
 
 # Fabricas de servicios para inyeccion de dependencias de FastAPI: cada
@@ -28,6 +29,10 @@ def get_prediccion_service(db: Session = Depends(get_db)) -> PrediccionService:
     return PrediccionService(
         PrediccionRepository(db), ApostadorRepository(db), PartidoRepository(db)
     )
+
+
+def get_prediccion_v2_service(db: Session = Depends(get_db)) -> PrediccionV2Service:
+    return PrediccionV2Service(get_prediccion_service(db))
 
 
 def get_consulta_service(db: Session = Depends(get_db)) -> ConsultaService:
