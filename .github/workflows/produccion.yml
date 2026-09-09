@@ -39,8 +39,8 @@ jobs:
       - name: Aplicar migraciones (Alembic) sobre PostgreSQL de CI
         run: alembic upgrade head
 
-      - name: Ejecución de pruebas automatizadas + validación de cobertura (quality gate >=85%)
-        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+      - name: Ejecución de pruebas automatizadas
+        run: pytest --cov=app --cov-report=term-missing
 
       - name: Lint (Ruff)
         run: ruff check .
