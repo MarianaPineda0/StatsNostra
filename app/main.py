@@ -1,7 +1,15 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import apostadores, consultas, partidos, predicciones, predicciones_v2
+from app.api.routes import (
+    apostadores,
+    apostadores_v2,
+    consultas,
+    partidos,
+    partidos_v2,
+    predicciones,
+    predicciones_v2,
+)
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.core.middleware import MetodoOverrideMiddleware
@@ -25,6 +33,8 @@ app.include_router(partidos.router, prefix="/api/v1")
 app.include_router(predicciones.router, prefix="/api/v1")
 app.include_router(consultas.router, prefix="/api/v1")
 
+app.include_router(apostadores_v2.router)
+app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
 
 
