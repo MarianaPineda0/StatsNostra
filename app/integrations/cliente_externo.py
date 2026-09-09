@@ -6,12 +6,12 @@ logger = logging.getLogger(__name__)
 
 
 def obtener_primero(url_base: str, ruta: str) -> dict | None:
-    """Llama en tiempo real a la API de un compañero y devuelve el primer
-    elemento de la lista que responda.
+    """Llama en tiempo real a una API externa y devuelve el primer elemento
+    de la lista que responda.
 
-    Nunca lanza excepcion hacia arriba: si la URL no esta configurada, la
-    nube del compañero esta caida, tarda demasiado o responde algo invalido,
-    devuelve None. Asi la caida de una nube externa no tumba esta API.
+    Nunca lanza excepcion hacia arriba: si la URL no esta configurada, esa
+    nube esta caida, tarda demasiado o responde algo invalido, devuelve
+    None. Asi la caida de una nube externa no tumba esta API.
     """
     if not url_base:
         return None
