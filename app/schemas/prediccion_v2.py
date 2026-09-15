@@ -9,6 +9,4 @@ from app.schemas.prediccion import PrediccionRespuesta
 class PrediccionV2Respuesta(BaseModel):
     prediccion: PrediccionRespuesta
     trading_journal_trade: dict | None
-    trading_journal_strategy: dict | None
-    ecommerce_cliente: dict | None
     ecommerce_comercio: dict | None
