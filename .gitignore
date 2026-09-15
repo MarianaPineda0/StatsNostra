@@ -9,6 +9,7 @@ env/
 # Variables de entorno con secretos reales
 .env
 .env.gcp
+k8s/secret.yaml
 
 # Cobertura y reportes de pruebas
 .coverage
