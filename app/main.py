@@ -12,13 +12,16 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
-from app.core.middleware import MetodoOverrideMiddleware
+from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 app.add_middleware(MetodoOverrideMiddleware)
+# Se agrega despues para quedar como la capa mas externa: el trace-id debe
+# quedar fijado antes que cualquier otro middleware o ruta se ejecute.
+app.add_middleware(TraceIdMiddleware)
 
 app.include_router(apostadores.router)
 app.include_router(partidos.router)
