@@ -9,6 +9,4 @@ from app.schemas.partido import PartidoRespuesta
 class PartidoV2Respuesta(BaseModel):
     partido: PartidoRespuesta
     trading_journal_trade: dict | None
-    trading_journal_strategy: dict | None
-    ecommerce_cliente: dict | None
     ecommerce_comercio: dict | None
