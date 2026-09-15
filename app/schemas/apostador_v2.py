@@ -9,6 +9,4 @@ from app.schemas.apostador import ApostadorRespuesta
 class ApostadorV2Respuesta(BaseModel):
     apostador: ApostadorRespuesta
     trading_journal_trade: dict | None
-    trading_journal_strategy: dict | None
-    ecommerce_cliente: dict | None
     ecommerce_comercio: dict | None
