@@ -1,4 +1,5 @@
 import logging
+import random
 
 import httpx
 
@@ -7,13 +8,11 @@ from app.core.trace import TRACE_ID_HEADER, trace_id_var
 logger = logging.getLogger(__name__)
 
 
-def obtener_primero(url_base: str, ruta: str) -> dict | None:
-    """Llama en tiempo real a una API externa y devuelve el primer elemento
-    de la lista que responda, propagando el trace-id de la peticion actual.
-
-    Nunca lanza excepcion hacia arriba: si la URL no esta configurada, esa
-    nube esta caida, tarda demasiado o responde algo invalido, devuelve
-    None. Asi la caida de una nube externa no tumba esta API.
+def obtener_aleatorio(url_base: str, ruta: str) -> dict | None:
+    """GET RANDOM: quien llama no elige un id, se devuelve un registro al
+    azar de la lista. Propaga el trace-id actual. Si la URL no esta
+    configurada, la nube esta caida o responde mal, devuelve None en vez
+    de tumbar esta API.
     """
     if not url_base:
         return None
@@ -32,5 +31,5 @@ def obtener_primero(url_base: str, ruta: str) -> dict | None:
         return None
 
     if isinstance(datos, list):
-        return datos[0] if datos else None
+        return random.choice(datos) if datos else None
     return datos
