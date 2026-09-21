@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-repo/statsnostra-api:v5
+          image: us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-repo/statsnostra-api:v6
           ports:
             - containerPort: 8080
           env:
