@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statsnostra-config
+data:
+  ENTORNO: "gke"
+  LOG_LEVEL: "INFO"
+  TRADING_JOURNAL_API_URL: ""
+  ECOMMERCE_API_URL: "http://alb-ecommerce-1653098310.us-east-2.elb.amazonaws.com"

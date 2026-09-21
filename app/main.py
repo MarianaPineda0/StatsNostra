@@ -1,21 +1,44 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import apostadores, consultas, partidos, predicciones
+from app.api.routes import (
+    apostadores,
+    apostadores_v2,
+    consultas,
+    partidos,
+    partidos_v2,
+    predicciones,
+    predicciones_v2,
+)
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
-from app.core.middleware import MetodoOverrideMiddleware
+from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 app.add_middleware(MetodoOverrideMiddleware)
+# Se agrega despues para quedar como la capa mas externa: el trace-id debe
+# quedar fijado antes que cualquier otro middleware o ruta se ejecute.
+app.add_middleware(TraceIdMiddleware)
 
 app.include_router(apostadores.router)
 app.include_router(partidos.router)
 app.include_router(predicciones.router)
 app.include_router(consultas.router)
+
+# Alias /api/v1 de las mismas rutas de arriba (mismo router, sin logica
+# duplicada) para cumplir la convencion de versionado acordada con el
+# grupo en la Entrega 2, sin romper las rutas sin prefijo ya existentes.
+app.include_router(apostadores.router, prefix="/api/v1")
+app.include_router(partidos.router, prefix="/api/v1")
+app.include_router(predicciones.router, prefix="/api/v1")
+app.include_router(consultas.router, prefix="/api/v1")
+
+app.include_router(apostadores_v2.router)
+app.include_router(partidos_v2.router)
+app.include_router(predicciones_v2.router)
 
 
 # Traduce las excepciones de dominio (levantadas en los servicios) a

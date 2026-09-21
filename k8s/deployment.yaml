@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statsnostra-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: statsnostra-api
+  template:
+    metadata:
+      labels:
+        app: statsnostra-api
+    spec:
+      containers:
+        - name: api
+          image: us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-repo/statsnostra-api:v4
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+          envFrom:
+            - configMapRef:
+                name: statsnostra-config
+            - secretRef:
+                name: statsnostra-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          args:
+            - "--port=5432"
+            - "project-3f57bb8c-371e-4b9c-949:us-central1:statsnostra-db"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
