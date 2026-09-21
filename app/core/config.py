@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     trading_journal_api_url: str = ""
     ecommerce_api_url: str = ""
 
+    # Memorystore (Redis) para cachear las respuestas de las APIs externas.
+    # Vacio por defecto: sin host configurado, el cache simplemente se
+    # salta y cada llamada va directo a la API externa.
+    redis_host: str = ""
+    redis_port: int = 6379
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
