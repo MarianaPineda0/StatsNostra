@@ -1,5 +1,5 @@
 from app.core.config import Settings
-from app.integrations.cliente_externo import obtener_primero
+from app.integrations.cliente_externo import obtener_aleatorio
 
 
 def obtener_datos_externos(settings: Settings) -> dict:
@@ -8,8 +8,10 @@ def obtener_datos_externos(settings: Settings) -> dict:
     servicios v2 (apostador, partido, prediccion) para no repetir estas
     llamadas."""
     return {
-        "trading_journal_trade": obtener_primero(
+        "trading_journal_trade": obtener_aleatorio(
             settings.trading_journal_api_url, "/api/v1/trades"
         ),
-        "ecommerce_comercio": obtener_primero(settings.ecommerce_api_url, "/api/v1/commerces"),
+        "ecommerce_comercio": obtener_aleatorio(
+            settings.ecommerce_api_url, "/api/v1/commerce"
+        ),
     }
