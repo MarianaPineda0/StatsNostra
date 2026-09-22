@@ -6,6 +6,6 @@ data:
   ENTORNO: "gke"
   LOG_LEVEL: "INFO"
   TRADING_JOURNAL_API_URL: ""
-  ECOMMERCE_API_URL: "http://k8s-default-ecommerc-233fe225e6-944515052.us-east-2.elb.amazonaws.com"
+  ECOMMERCE_API_URL: "http://k8s-default-ecommerc-233fe225e6-1328693903.us-east-2.elb.amazonaws.com"
   REDIS_HOST: "10.120.123.163"
   REDIS_PORT: "6379"
