@@ -33,8 +33,13 @@ jobs:
       - name: Instalar plugin de autenticacion de GKE
         run: gcloud components install gke-gcloud-auth-plugin --quiet
 
-      - name: Construir imagen (Cloud Build + Buildpacks, sin Docker)
-        run: gcloud builds submit --pack image=$IMAGE:${{ github.sha }} --project=$PROJECT_ID --billing-project=$PROJECT_ID
+      - name: Autenticar Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - uses: buildpacks/github-actions/setup-pack@v5.9.2
+
+      - name: Construir y publicar imagen (Buildpacks, sin Dockerfile)
+        run: pack build $IMAGE:${{ github.sha }} --builder=gcr.io/buildpacks/builder:latest --publish
 
       - name: Conectar al cluster
         run: gcloud container clusters get-credentials statsnostra-gke --zone=us-central1-a --project=$PROJECT_ID
