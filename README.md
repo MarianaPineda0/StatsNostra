@@ -37,15 +37,17 @@ su predicción una vez el partido finaliza.
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
 | 🔵 | **Producción** — API (Render, solo v1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
 | 📘 | **Producción** — Swagger | [statsnostra-produccion.onrender.com/docs](https://statsnostra-produccion.onrender.com/docs) |
+| 📊 | **Grafana Cloud** — Dashboard multicloud | [Multicloud - Observabilidad unificada](https://sturdyanchovy2072.grafana.net/d/mp8kfcm/multicloud-observabilidad-unificada) |
+| 🚨 | **Grafana Cloud** — Alertas | [Reglas de alerta](https://sturdyanchovy2072.grafana.net/alerting/list) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
 
 ## ☸️ Arquitectura multicloud
 
-| API | Nube | Componente transversal |
-|---|---|---|
-| StatsNostra (esta) | Google Cloud — GKE | Caché Distribuida (Memorystore / Redis) |
-| trading-journal | Oracle Cloud (datos) + Azure AKS (cómputo) | Object Storage |
-| ecommerce | AWS — EKS | MS Orquestador + Cola/Tópico |
+| API | Integrante que la opera | Nube | Componente transversal |
+|---|---|---|---|
+| StatsNostra (esta) | Mariana Pineda | Google Cloud — GKE | Caché Distribuida (Memorystore / Redis) |
+| trading-journal | Juan Pablo Ramírez | Oracle Cloud (datos) + Azure AKS (cómputo) | Object Storage |
+| ecommerce | Juan Felipe Palacio | AWS — EKS | MS Orquestador + Cola/Tópico |
 
 ```mermaid
 flowchart TB
@@ -60,6 +62,11 @@ flowchart TB
     GCP --> CloudSQL[(Cloud SQL)]
     GCP --> Redis[(Memorystore / Redis)]
     GCP --> Monitoring[Cloud Monitoring + Logging + Alerting]
+
+    GCP -. OTLP: trazas · métricas · logs .-> Grafana[Grafana Cloud · Tempo · Mimir · Loki]
+    AWS -. OTLP .-> Grafana
+    OCI -. OTLP .-> Grafana
+    Orq -. OTLP .-> Grafana
 ```
 
 **StatsNostra en GCP:**
@@ -67,6 +74,7 @@ flowchart TB
 - `api/v1` y `api/v2`: CRUD completo para Apostador, Partido y Predicción. El `GetById` de `v2` agrega un `Trade` de trading-journal y un `Comercio` de ecommerce, en tiempo real, consumiendo el **`api/v2`** de cada compañero (contratos versionados), GET RANDOM, sin datos quemados.
 - Trace-id: header `X-Trace-Id` (UUID), propagado en toda llamada saliente — confirmado end-to-end con trading-journal y con el orquestador.
 - Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce, más **invalidación explícita** vía `DELETE /api/v2/cache/{entidad}` (fuera del TTL).
+- Datos de ejemplo: la BD de Cloud SQL tiene 3 apostadores, 5 partidos y 14 predicciones (uno de los partidos ya finalizado, con sus predicciones evaluadas). Se cargaron por la propia API (`POST`), no están en el código; así, cuando otra API pide una entidad de esta al azar (GET RANDOM) recibe datos y no `null`.
 - Observabilidad: ver sección dedicada abajo.
 - Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
 
@@ -98,14 +106,119 @@ herramienta SAAS transversal compartida por las tres nubes del equipo.
   verificada end-to-end (disparo real + entrega de email confirmada)
   inyectando un valor sintético en la condición, sin afectar el tráfico
   real del clúster.
-- **Dashboard unificado**: compartido con el equipo en el mismo org de
-  Grafana Cloud (acceso Editor), con un panel de trazas sin filtrar por
-  servicio (ya muestra `api-gcp` y `api-oci` intercalados) y una guía
-  embebida para que cada integrante agregue su propia fila de métricas —
-  cada stack expone nombres de métricas distintos (OTel/Python vs.
-  Micrometer/Spring en OCI), así que no hay una sola query que unifique
-  métricas entre las tres nubes, pero sí un solo dashboard y un solo panel
-  de trazas reales.
+- **Dashboard unificado** ([abrir](https://sturdyanchovy2072.grafana.net/d/mp8kfcm/multicloud-observabilidad-unificada)):
+  un solo tablero compartido por los tres integrantes en el mismo org de
+  Grafana Cloud (acceso Editor), organizado en una fila por servicio
+  (`api-gcp`, `api-oci`, `api-aws` + `orchestrator`). La fila de `api-gcp`
+  incluye:
+  - **RED por endpoint de `/api/v2`**: tasa de peticiones, errores (5xx
+    y 4xx), latencia p50 y p95, agrupados por ruta (`http_target`).
+  - **Caché**: aciertos y fallos por segundo, *hit ratio* y totales.
+  - **Trazas**: recientes de todas las nubes, y un panel que filtra solo las
+    que traen spans de `api-gcp`, `api-oci` y `api-aws` a la vez.
+  - **Logs** (Loki) filtrables con la variable `trace_id` (el
+    `X-Trace-Id` de negocio); cada log trae además el `trace_id` nativo de
+    OTel para saltar a la traza en Tempo.
+  - **Estado de las alertas** de Grafana.
+
+  Cada stack expone nombres de métricas distintos (OTel/Python, Micrometer/Spring
+  en OCI, OTel/Node en AWS), por eso las filas de métricas son una por
+  servicio y no una sola query; lo que sí es realmente común a las tres
+  nubes son las trazas.
+- **Traza extremo a extremo entre las tres nubes** (verificada en Tempo): una
+  sola petición `GET /api/v2/apostadores/7` produce **una sola traza** con
+  spans de `api-gcp`, `api-oci` y `api-aws`; las trazas que empiezan en el
+  `orchestrator` incluyen además a los tres. La propagación usa el contexto
+  W3C de OTel (httpx en esta API) más el header `X-Trace-Id` de negocio.
+
+#### 📈 Métricas de esta API (detalle)
+
+Salen por OTLP cada 30 s hacia Grafana Cloud (Mimir), con `service_name="api-gcp"`.
+Las HTTP vienen de la auto-instrumentación de FastAPI y httpx; las de caché son
+contadores propios creados con la API de métricas de OTel
+([`app/core/metrics.py`](app/core/metrics.py)).
+
+| Métrica | Tipo | Labels útiles | Qué mide |
+|---|---|---|---|
+| `http_server_duration_milliseconds_{bucket,count,sum}` | Histograma | `http_target`, `http_method`, `http_status_code` | Volumen y latencia de cada endpoint; base de las métricas RED |
+| `http_server_active_requests` | Gauge | `http_method`, `http_host` | Peticiones en curso |
+| `http_server_request_size_bytes_*` / `http_server_response_size_bytes_*` | Histograma | `http_target`, `http_status_code` | Tamaño de las peticiones y respuestas |
+| `http_client_duration_milliseconds_*` | Histograma | `http_method`, `http_status_code` | Latencia de las llamadas salientes hacia los compañeros (el destino se ve en las trazas, no en esta métrica) |
+| `statsnostra_cache_aciertos_total` | Contador | — | Lecturas servidas desde Redis |
+| `statsnostra_cache_fallos_total` | Contador | — | Lecturas que fueron a la API del compañero |
+
+`http_target` guarda la ruta con plantilla (por ejemplo
+`/api/v2/partidos/{partido_id}`), así que el RED sale por endpoint y no por id.
+
+Consultas que usan los paneles y la alerta:
+
+| Panel | PromQL |
+|---|---|
+| Tasa de peticiones por endpoint | `sum by(http_target)(rate(http_server_duration_milliseconds_count{service_name="api-gcp", http_target=~"/api/v2/.*"}[$__rate_interval]))` |
+| Errores 5xx | `sum(rate(http_server_duration_milliseconds_count{service_name="api-gcp", http_target=~"/api/v2/.*", http_status_code=~"5.."}[$__rate_interval])) or vector(0)` |
+| Errores 4xx por endpoint | igual, con `http_status_code=~"4.."` y `sum by(http_target)` |
+| Latencia p50 / p95 por endpoint | `histogram_quantile(0.95, sum by(le, http_target)(rate(http_server_duration_milliseconds_bucket{service_name="api-gcp", http_target=~"/api/v2/.*"}[$__rate_interval])))` (0.5 para p50) |
+| Caché, aciertos y fallos por segundo | `sum(rate(statsnostra_cache_aciertos_total[$__rate_interval]))` y su equivalente de `fallos` |
+| Hit ratio | `sum(increase(statsnostra_cache_aciertos_total[$__range])) / (sum(increase(statsnostra_cache_aciertos_total[$__range])) + sum(increase(statsnostra_cache_fallos_total[$__range])))` |
+| Alerta 5xx | `sum(increase(http_server_duration_milliseconds_count{service_name="api-gcp", http_status_code=~"5.."}[5m])) > 0`, evaluada cada minuto y notificada por correo |
+
+Cada integrante mantiene su propia fila del dashboard con las métricas de su
+stack.
+
+#### 🔗 Correlación entre nubes
+
+Un mismo mensaje se puede seguir de punta a punta con dos identificadores que
+se propagan juntos:
+
+1. **`X-Trace-Id` (negocio).** `TraceIdMiddleware` lo toma de la petición
+   entrante, o genera un UUID, y lo deja disponible durante toda la petición.
+   Se devuelve en la respuesta y el cliente HTTP
+   ([`app/integrations/cliente_externo.py`](app/integrations/cliente_externo.py))
+   lo reenvía en cada llamada saliente hacia trading-journal y ecommerce.
+2. **Contexto de traza W3C (OTel).** La instrumentación de httpx inyecta
+   `traceparent` en esas mismas llamadas, de modo que los spans de las otras APIs
+   se unen a la misma traza. Verificado en Tempo: una petición a
+   `GET /api/v2/apostadores/7` genera **una traza con spans de `api-gcp`,
+   `api-oci` y `api-aws`**.
+3. **Logs.** Cada línea sale en JSON por stdout (Cloud Logging) y por OTLP
+   (Loki) con el `trace_id` nativo de OTel y el `trace_id_negocio`
+   (`X-Trace-Id`), lo que permite saltar del log a la traza y de la traza a los
+   logs.
+
+Consultas de ejemplo:
+
+```
+# Tempo (TraceQL): trazas que pasan por las tres nubes
+{resource.service.name="api-gcp"} && {resource.service.name="api-oci"} && {resource.service.name="api-aws"}
+
+# Loki (LogQL): todos los logs de un mensaje
+{service_name="api-gcp"} | trace_id_negocio="demo-001"
+```
+
+### 🎬 Demostración en vivo
+
+Base: `http://34.57.56.128`.
+
+1. **Flujo entre nubes y trace-id.**
+   `curl -H "X-Trace-Id: demo-001" http://34.57.56.128/api/v2/apostadores/7`
+   devuelve el apostador más un `Trade` (OCI) y un `Comercio` (AWS) reales. En
+   el dashboard, el panel de trazas que cruzan las tres nubes muestra la traza
+   y el panel de logs, con `trace_id = demo-001`, sus líneas.
+2. **Modificar un dato en tiempo real.**
+   `PATCH /api/v2/apostadores/7` con `{"nombre":"..."}` y luego `GET` del mismo
+   id refleja el cambio. Para los datos de los compañeros, la caché retiene
+   30 s; `DELETE /api/v2/cache/ecommerce` (o `trading_journal`) fuerza a traer
+   el dato nuevo en la siguiente petición.
+3. **Escalamiento del clúster.** Generar carga
+   (`for i in $(seq 1 15); do (while true; do curl -s -o /dev/null http://34.57.56.128/api/v2/apostadores/7; done) & done`)
+   y observar `kubectl get hpa statsnostra-api-hpa -w` y
+   `kubectl get pods -l app=statsnostra-api`: pasa de 2 a 4 réplicas al superar
+   el 70 % de CPU. Detener la carga con `kill $(jobs -p)`.
+4. **Disparo de la alerta.** En Grafana → regla *StatsNostra api-gcp: errores 5xx*,
+   reemplazar temporalmente la query por `vector(1)`: la regla pasa a *Firing* y
+   llega el correo a `email-mariana`. Después se restaura la query original
+   (`sum(increase(http_server_duration_milliseconds_count{service_name="api-gcp", http_status_code=~"5.."}[5m]))`).
+   La alerta nativa de Cloud Monitoring se dispara con 5xx reales.
 
 ### Servicios de GCP usados
 
