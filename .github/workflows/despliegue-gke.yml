@@ -24,8 +24,16 @@ jobs:
         with:
           workload_identity_provider: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+          project_id: project-3f57bb8c-371e-4b9c-949
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: project-3f57bb8c-371e-4b9c-949
+
+      - name: Fijar proyecto de cuota
+        run: |
+          gcloud config set project $PROJECT_ID
+          gcloud auth application-default set-quota-project $PROJECT_ID
 
       - name: Instalar plugin de autenticacion de GKE
         run: gcloud components install gke-gcloud-auth-plugin --quiet
