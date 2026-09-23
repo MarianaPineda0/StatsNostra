@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     )
     log_level: str = "INFO"
 
-    # URLs de las APIs de los compañeros de grupo (Entrega 2, api/v2),
-    # identificadas por el nombre de su API, no de su autor. Vacias por
-    # defecto: si no estan configuradas, el cliente externo simplemente no
-    # llama a esa nube en vez de fallar.
+    # URLs de las APIs externas del equipo, identificadas por el nombre
+    # de su API, no de su autor. Vacias por defecto: si no estan
+    # configuradas, el cliente externo simplemente no llama a esa nube en
+    # vez de fallar.
     trading_journal_api_url: str = ""
     ecommerce_api_url: str = ""
 
@@ -34,9 +34,12 @@ class Settings(BaseSettings):
     redis_host: str = ""
     redis_port: int = 6379
 
-    # Proyecto de GCP para exportar trazas a Cloud Trace. Vacio por
-    # defecto: sin proyecto, OpenTelemetry no se activa.
-    gcp_project_id: str = ""
+    # Trazas y metricas via OTLP hacia Grafana Cloud (acordado con el
+    # equipo). Vacio por defecto: sin endpoint, OpenTelemetry no se activa.
+    grafana_otlp_endpoint: str = ""
+    grafana_otlp_user: str = ""
+    grafana_otlp_token: str = ""
+    otel_service_name: str = "api-gcp"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
