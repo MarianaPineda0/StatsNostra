@@ -21,7 +21,13 @@ settings = get_settings()
 configurar_logging(settings.log_level)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
-configurar_tracing(app, settings.gcp_project_id)
+configurar_tracing(
+    app,
+    settings.grafana_otlp_endpoint,
+    settings.grafana_otlp_user,
+    settings.grafana_otlp_token,
+    settings.otel_service_name,
+)
 
 app.add_middleware(MetodoOverrideMiddleware)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
