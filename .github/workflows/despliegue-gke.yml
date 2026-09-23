@@ -30,16 +30,11 @@ jobs:
         with:
           project_id: project-3f57bb8c-371e-4b9c-949
 
-      - name: Fijar proyecto de cuota
-        run: |
-          gcloud config set project $PROJECT_ID
-          gcloud auth application-default set-quota-project $PROJECT_ID
-
       - name: Instalar plugin de autenticacion de GKE
         run: gcloud components install gke-gcloud-auth-plugin --quiet
 
       - name: Construir imagen (Cloud Build + Buildpacks, sin Docker)
-        run: gcloud builds submit --pack image=$IMAGE:${{ github.sha }} --project=$PROJECT_ID
+        run: gcloud builds submit --pack image=$IMAGE:${{ github.sha }} --project=$PROJECT_ID --billing-project=$PROJECT_ID
 
       - name: Conectar al cluster
         run: gcloud container clusters get-credentials statsnostra-gke --zone=us-central1-a --project=$PROJECT_ID
