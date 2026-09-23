@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     redis_host: str = ""
     redis_port: int = 6379
 
+    # Proyecto de GCP para exportar trazas a Cloud Trace. Vacio por
+    # defecto: sin proyecto, OpenTelemetry no se activa.
+    gcp_project_id: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
