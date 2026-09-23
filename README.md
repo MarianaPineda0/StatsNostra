@@ -16,6 +16,8 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/Docker%20Compose-Orquestado-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Compose"/>
   <img src="https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
   <img src="https://img.shields.io/badge/Render-Deploy-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render"/>
+  <img src="https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
   <img src="https://img.shields.io/badge/Pytest-97%25%20coverage-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest coverage"/>
 </p>
 
@@ -67,11 +69,14 @@ flowchart TB
 
 ## 🎯 Objetivo
 
-Proyecto de la materia **Énfasis I: DevOps**, construido para demostrar un
-ciclo completo de desarrollo y despliegue: API REST real con persistencia en
-PostgreSQL, contenerización con Docker, y dos ambientes independientes
-(Pruebas/Producción) desplegados en Render mediante pipelines de CI/CD con
-GitHub Actions.
+Proyecto de la materia **Énfasis I: DevOps**. Entrega 1: API REST real con
+persistencia en PostgreSQL, contenerización con Docker, dos ambientes
+independientes (Pruebas/Producción) en Render con CI/CD en GitHub Actions.
+Entrega 2: arquitectura multicloud junto con otras dos APIs del curso
+(`trading-journal` en OCI/Azure, `ecommerce` en AWS) — esta API corre en
+GKE (GCP), consume entidades reales de las otras dos en tiempo real,
+propaga un trace-id entre las tres nubes, y agrega caché distribuida,
+observabilidad y un pipeline de despliegue automático a Kubernetes.
 
 ## 🏗️ Arquitectura
 
@@ -179,6 +184,24 @@ PUT y PATCH usan el mismo handler y el mismo schema de actualización (todos los
 campos opcionales), así que ambos aceptan una actualización parcial —
 solo se distinguen por el verbo HTTP.
 
+### 🌍 `/api/v1` y `/api/v2` (Entrega 2)
+
+Los endpoints de arriba también están disponibles bajo `/api/v1/...`
+(alias, mismo código, misma lógica) — convención acordada con el grupo.
+
+`/api/v2` replica el mismo CRUD, pero el `GetById` de cada entidad agrega
+en tiempo real un `Trade` de `trading-journal` y un `Comercio` de
+`ecommerce` (registro al azar de su lista, nunca fijo, nunca quemado):
+
+```
+GET /api/v2/apostadores/{id}
+GET /api/v2/partidos/{id}
+GET /api/v2/predicciones/{id}
+```
+
+El resto del CRUD en `v2` (crear, listar, actualizar, eliminar) es idéntico
+a `v1`, sin agregación.
+
 ### 🔍 Método QUERY
 
 Además del CRUD estándar, la API implementa el verbo HTTP **QUERY** real
@@ -205,7 +228,7 @@ Persistencia real en PostgreSQL — no se usa `Base.metadata.create_all()`
 como mecanismo de creación de tablas en ningún ambiente; todo el esquema se
 gestiona con migraciones de Alembic (`migrations/versions/`).
 
-## 🐳 Docker
+## 🐳 Docker (Entrega 1, desarrollo local)
 
 ```bash
 docker compose up --build
@@ -214,6 +237,10 @@ docker compose up --build
 Levanta la API y PostgreSQL juntos, aplica las migraciones automáticamente,
 y deja la API disponible en `http://localhost:8000`. Detalle completo en
 [`docs/docker.md`](docs/docker.md).
+
+`Dockerfile` y `docker-compose.yml` quedan como base para correr el
+proyecto en tu máquina; el despliegue de la Entrega 2 (GKE) no los usa —
+la imagen se construye con Buildpacks (ver CI/CD abajo).
 
 ## ⚙️ Instalación y ejecución local
 
@@ -258,19 +285,21 @@ pytest --cov=app --cov-fail-under=85    # gate de Producción
 
 ## 🚀 CI/CD
 
-Dos pipelines independientes en GitHub Actions:
+Tres pipelines en GitHub Actions:
 
-| Pipeline | Rama | Cobertura mínima |
+| Pipeline | Rama | Qué hace |
 |---|---|---|
-| ⚙️ `.github/workflows/pruebas.yml` | `develop` | ≥ 60% |
-| ⚙️ `.github/workflows/produccion.yml` | `main` | ≥ 85% |
+| ⚙️ `pruebas.yml` | `develop` | Pruebas + lint → despliegue a Render (Entrega 1) |
+| ⚙️ `produccion.yml` | `main` | Pruebas + lint → despliegue a Render (Entrega 1) |
+| ☸️ `despliegue-gke.yml` | `develop` | Build con Buildpacks → Artifact Registry → despliegue automático a GKE (Entrega 2) |
 
-Cada uno: build → PostgreSQL efímero de CI → migraciones → pruebas +
-quality gate → lint → build de imagen Docker → despliegue a Render (solo si
-todo lo anterior pasa). Ver [`docs/ci-cd.md`](docs/ci-cd.md) para el
-detalle y la evidencia de que un test fallido bloquea el despliegue.
+`despliegue-gke.yml` se autentica sin llaves (Workload Identity Federation)
+y construye la imagen sin Cloud Build ni Docker: usa `pack` directo en el
+runner, publica en Artifact Registry, y actualiza el `Deployment` en el
+clúster (`kubectl set image` + `rollout status`). Ver [`docs/ci-cd.md`](docs/ci-cd.md)
+para el detalle de los pipelines de Render.
 
-## ☁️ Ambientes (Render)
+## ☁️ Ambientes (Render, Entrega 1)
 
 Dos Web Services independientes, cada uno con su propia base de datos
 PostgreSQL (aisladas entre sí: `CONNECT` revocado de `PUBLIC`, un rol de
@@ -286,7 +315,8 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 ## 📚 Documentación adicional
 
 - 🏗️ [`docs/arquitectura.md`](docs/arquitectura.md)
-- 🐳 [`docs/docker.md`](docs/docker.md)
-- 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)
-- ☁️ [`docs/render.md`](docs/render.md)
+- 🐳 [`docs/docker.md`](docs/docker.md) (Entrega 1)
+- 🚀 [`docs/ci-cd.md`](docs/ci-cd.md) (Entrega 1)
+- ☁️ [`docs/render.md`](docs/render.md) (Entrega 1)
 - 🧪 [`docs/pruebas.md`](docs/pruebas.md)
+- ☸️ [`k8s/`](k8s/) — manifiestos de GKE (Entrega 2)
