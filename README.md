@@ -21,7 +21,8 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
   <img src="https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
   <img src="https://img.shields.io/badge/Redis-Memorystore-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
-  <img src="https://img.shields.io/badge/Prometheus-Metricas-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" alt="Prometheus"/>
+  <img src="https://img.shields.io/badge/OpenTelemetry-Trazas%20%2B%20Metricas%20%2B%20Logs-000000?style=for-the-badge&logo=opentelemetry&logoColor=white" alt="OpenTelemetry"/>
+  <img src="https://img.shields.io/badge/Grafana%20Cloud-Observabilidad-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana Cloud"/>
   <img src="https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
 </p>
 
@@ -62,12 +63,49 @@ flowchart TB
 ```
 
 **StatsNostra en GCP:**
-- Despliegue: GKE, 2 nodos, 2 réplicas, `HorizontalPodAutoscaler` (2-4, 70% CPU), probes de liveness/readiness, `requests`/`limits`, `ConfigMap` + `Secret` (ver [`k8s/`](k8s/)).
-- `api/v1` y `api/v2`: CRUD completo para Apostador, Partido y Predicción. El `GetById` de `v2` agrega un `Trade` de trading-journal y un `Comercio` de ecommerce, en tiempo real, GET RANDOM, sin datos quemados.
+- Despliegue: GKE, 2 nodos, 2-4 réplicas, `HorizontalPodAutoscaler` (2-4, 70% CPU) — **escalamiento probado con carga real** contra el LoadBalancer (2→4 réplicas, evidencia en eventos de Kubernetes), probes de liveness/readiness, `requests`/`limits`, `ConfigMap` + `Secret` (ver [`k8s/`](k8s/)).
+- `api/v1` y `api/v2`: CRUD completo para Apostador, Partido y Predicción. El `GetById` de `v2` agrega un `Trade` de trading-journal y un `Comercio` de ecommerce, en tiempo real, consumiendo el **`api/v2`** de cada compañero (contratos versionados), GET RANDOM, sin datos quemados.
 - Trace-id: header `X-Trace-Id` (UUID), propagado en toda llamada saliente — confirmado end-to-end con trading-journal y con el orquestador.
-- Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce.
-- Observabilidad: Cloud Monitoring + Cloud Logging (JSON con `trace_id`) + alerta de 5xx a correo, probada con una falla real.
+- Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce, más **invalidación explícita** vía `DELETE /api/v2/cache/{entidad}` (fuera del TTL).
+- Observabilidad: ver sección dedicada abajo.
 - Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
+
+### 📊 Observabilidad
+
+Dos capas, como pide la rúbrica: monitoreo nativo de la nube propia, y una
+herramienta SAAS transversal compartida por las tres nubes del equipo.
+
+**Nativo (GCP):**
+- Cloud Logging (logs JSON con `trace_id`, activo por defecto en el clúster).
+- Cloud Monitoring con Managed Prometheus (métricas de infraestructura).
+- Log-based metric `statsnostra_errores_5xx` + alerta a correo, con canal de
+  notificación configurado — probada con una falla real.
+
+**Transversal (Grafana Cloud, compartido con el equipo vía OTLP):**
+- **Trazas**: `OTLPSpanExporter`, instrumentación automática de FastAPI y
+  httpx (`app/core/tracing.py`) — se ve en Tempo junto con las trazas de
+  `trading-journal` (mismo org de Grafana Cloud, ya reportando como
+  `api-oci`).
+- **Métricas**: RED (tasa de peticiones, errores, p50/p95) vía
+  auto-instrumentación de OTel, más métricas propias (`statsnostra_cache_aciertos`/`_fallos`) expuestas por la API de métricas de OTel — no
+  `prometheus_client` — para viajar por el mismo exportador OTLP sin
+  depender de que algo scrapee `/metrics` dentro del clúster.
+- **Logs**: exportados también por OTLP a Grafana Loki (`LoggingHandler` de
+  OTel agregado al logger raíz y a los de `uvicorn`), con el trace-id de
+  negocio (`X-Trace-Id`) como atributo estructurado (`trace_id_negocio`)
+  para poder correlacionar entre nubes sin depender solo de Cloud Logging.
+- **Alerta**: regla en Grafana Alerting sobre tasa de errores 5xx,
+  verificada end-to-end (disparo real + entrega de email confirmada)
+  inyectando un valor sintético en la condición, sin afectar el tráfico
+  real del clúster.
+- **Dashboard unificado**: compartido con el equipo en el mismo org de
+  Grafana Cloud (acceso Editor), con un panel de trazas sin filtrar por
+  servicio (ya muestra `api-gcp` y `api-oci` intercalados) y una guía
+  embebida para que cada integrante agregue su propia fila de métricas —
+  cada stack expone nombres de métricas distintos (OTel/Python vs.
+  Micrometer/Spring en OCI), así que no hay una sola query que unifique
+  métricas entre las tres nubes, pero sí un solo dashboard y un solo panel
+  de trazas reales.
 
 ### Servicios de GCP usados
 
@@ -148,9 +186,10 @@ detalle completo.
 | ☸️ Orquestación | Kubernetes (GKE), `HorizontalPodAutoscaler` |
 | 🐘 Base de datos | Cloud SQL (PostgreSQL), vía Cloud SQL Auth Proxy |
 | ⚡ Caché | Redis (Memorystore) |
-| 🌐 Cliente HTTP | httpx — llamadas en tiempo real a trading-journal y ecommerce |
-| 📊 Métricas | Prometheus (`prometheus-fastapi-instrumentator`) |
-| 📋 Logs y alertas | Cloud Logging, Cloud Monitoring |
+| 🌐 Cliente HTTP | httpx — llamadas en tiempo real a `api/v2` de trading-journal y ecommerce |
+| 📊 Trazas y métricas | OpenTelemetry (auto-instrumentación FastAPI/httpx) → Grafana Cloud (Tempo + Mimir) vía OTLP |
+| 📋 Logs | Cloud Logging (nativo) + Grafana Loki (OTLP) |
+| 🔔 Alertas | Cloud Monitoring (5xx → correo) + Grafana Alerting (5xx, probada end-to-end) |
 | 📦 Build | Cloud Native Buildpacks (`pack`), sin Dockerfile |
 | 🔑 Autenticación CI | Workload Identity Federation (sin llaves) |
 | 🚀 CI/CD | GitHub Actions → GKE |
@@ -233,14 +272,16 @@ con el grupo. `/api/v2` es una versión nueva y separada, no un reemplazo.
 | Prefijo | `/apostadores` · `/api/v1/apostadores` | `/api/v2/apostadores` |
 | Crear, listar, actualizar, eliminar | ✅ | ✅ idéntico a `v1`, sin agregación |
 | `GET /{id}` | Solo tu propia entidad | Tu entidad **+** un `Trade` de `trading-journal` **+** un `Comercio` de `ecommerce`, obtenidos en tiempo real |
-| Origen del dato externo | — | Registro al azar de la lista del compañero (GET RANDOM) — nunca fijo, nunca quemado |
+| Origen del dato externo | — | Registro al azar del `api/v2` del compañero (GET RANDOM) — nunca fijo, nunca quemado |
 | Si el compañero está caído | — | El campo sale en `null`; tu API no se cae |
 | Caché | — | Respuesta externa cacheada 30s (Redis) antes de volver a llamar |
+| Invalidación de caché | — | `DELETE /api/v2/cache/{entidad}` (`trading_journal` \| `ecommerce`), fuera del TTL |
 
 ```
-GET /api/v2/apostadores/{id}
-GET /api/v2/partidos/{id}
-GET /api/v2/predicciones/{id}
+GET    /api/v2/apostadores/{id}
+GET    /api/v2/partidos/{id}
+GET    /api/v2/predicciones/{id}
+DELETE /api/v2/cache/{entidad}      # entidad: trading_journal | ecommerce
 ```
 
 **Ejemplo real, `GET /api/v2/apostadores/7`:**
