@@ -62,9 +62,8 @@ def configurar_tracing(
     )
 
     proveedor_logs = LoggerProvider(resource=recurso)
-    proveedor_logs.add_log_record_processor(
-        BatchLogRecordProcessor(OTLPLogExporter(endpoint=f"{endpoint}/v1/logs", headers=headers))
-    )
+    exportador_logs = OTLPLogExporter(endpoint=f"{endpoint}/v1/logs", headers=headers)
+    proveedor_logs.add_log_record_processor(BatchLogRecordProcessor(exportador_logs))
     set_logger_provider(proveedor_logs)
 
     manejador_logs = LoggingHandler(level=logging.NOTSET, logger_provider=proveedor_logs)
