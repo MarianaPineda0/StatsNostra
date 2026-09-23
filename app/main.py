@@ -5,6 +5,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import (
     apostadores,
     apostadores_v2,
+    cache,
     consultas,
     partidos,
     partidos_v2,
@@ -50,6 +51,7 @@ app.include_router(consultas.router, prefix="/api/v1")
 app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
+app.include_router(cache.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.

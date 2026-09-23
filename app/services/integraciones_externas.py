@@ -2,8 +2,16 @@ import json
 
 from app.core.config import Settings
 from app.core.metrics import cache_aciertos, cache_fallos
-from app.integrations.cache import guardar_en_cache, obtener_del_cache
+from app.integrations.cache import guardar_en_cache, invalidar_cache, obtener_del_cache
 from app.integrations.cliente_externo import obtener_aleatorio
+
+# Unica fuente de verdad de las claves de cache por entidad externa: la usan
+# tanto obtener_datos_externos (lectura) como invalidar_cache_externa
+# (invalidacion explicita, ver app/api/routes/cache.py).
+CLAVES_CACHE_EXTERNA = {
+    "trading_journal": "trading_journal:trade",
+    "ecommerce": "ecommerce:comercio",
+}
 
 
 def _con_cache(settings: Settings, clave: str, url_base: str, ruta: str) -> dict | None:
@@ -28,11 +36,24 @@ def obtener_datos_externos(settings: Settings) -> dict:
     return {
         "trading_journal_trade": _con_cache(
             settings,
-            "trading_journal:trade",
+            CLAVES_CACHE_EXTERNA["trading_journal"],
             settings.trading_journal_api_url,
-            "/api/v1/trades",
+            "/api/v2/trades",
         ),
         "ecommerce_comercio": _con_cache(
-            settings, "ecommerce:comercio", settings.ecommerce_api_url, "/api/v1/commerce"
+            settings,
+            CLAVES_CACHE_EXTERNA["ecommerce"],
+            settings.ecommerce_api_url,
+            "/api/v2/commerce",
         ),
     }
+
+
+def invalidar_cache_externa(settings: Settings, entidad: str) -> bool:
+    """Invalidacion explicita (fuera del TTL de 30s) de la cache de una
+    entidad externa puntual. Devuelve False si `entidad` no es reconocida."""
+    clave = CLAVES_CACHE_EXTERNA.get(entidad)
+    if clave is None:
+        return False
+    invalidar_cache(settings, clave)
+    return True
