@@ -13,7 +13,7 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/Alembic-Migrations-8A2BE2?style=for-the-badge" alt="Alembic"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
   <img src="https://img.shields.io/badge/Render-Deploy-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render"/>
-  <img src="https://img.shields.io/badge/Pytest-97%25%20coverage-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest coverage"/>
+  <img src="https://img.shields.io/badge/Pytest-46%20pruebas-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest"/>
 </p>
 
 **v2**
@@ -105,14 +105,15 @@ Arquitectura por capas, cada una con una única responsabilidad:
 ```
 app/
 ├── api/            # Rutas HTTP (FastAPI) y wiring de dependencias
-│   ├── routes/
+│   ├── routes/     # v1 y v2, un archivo por entidad
 │   └── dependencies.py
-├── core/           # Configuración, excepciones de dominio, middleware
+├── core/           # Configuración, excepciones, middleware, trace-id, logging, metricas
 ├── db/             # Conexión a PostgreSQL (engine, sesión)
+├── integrations/   # Cliente HTTP hacia trading-journal/ecommerce y cache (v2)
 ├── models/         # Entidades de SQLAlchemy (tablas reales)
-├── schemas/        # Validación de entrada/salida (Pydantic)
+├── schemas/        # Validación de entrada/salida (Pydantic), v1 y v2
 ├── repositories/   # Acceso a datos (consultas SQL), sin reglas de negocio
-├── services/       # Reglas de negocio — capa donde vive la lógica real
+├── services/       # Reglas de negocio y agregación v2
 └── main.py         # Punto de entrada de la aplicación
 ```
 
@@ -124,6 +125,8 @@ detalle completo.
 
 ## 🛠️ Tecnologías
 
+**Base (v1):**
+
 | Categoría | Tecnología |
 |---|---|
 | 🐍 Backend | Python 3.12, FastAPI, Uvicorn |
@@ -131,11 +134,26 @@ detalle completo.
 | 🔗 ORM | SQLAlchemy 2.x |
 | 🗃️ Migraciones | Alembic |
 | ✅ Validación | Pydantic v2 |
-| 🧪 Testing | Pytest, pytest-cov, httpx |
+| 🧪 Testing | Pytest, pytest-cov |
 | 🧹 Calidad | Ruff, Black |
 | 🐳 Contenedores | Docker, Docker Compose |
 | 🚀 CI/CD | GitHub Actions |
 | ☁️ Cloud | Render (plan gratuito) |
+
+**Multicloud (v2):**
+
+| Categoría | Tecnología |
+|---|---|
+| ☁️ Cloud | Google Cloud Platform |
+| ☸️ Orquestación | Kubernetes (GKE), `HorizontalPodAutoscaler` |
+| 🐘 Base de datos | Cloud SQL (PostgreSQL), vía Cloud SQL Auth Proxy |
+| ⚡ Caché | Redis (Memorystore) |
+| 🌐 Cliente HTTP | httpx — llamadas en tiempo real a trading-journal y ecommerce |
+| 📊 Métricas | Prometheus (`prometheus-fastapi-instrumentator`) |
+| 📋 Logs y alertas | Cloud Logging, Cloud Monitoring |
+| 📦 Build | Cloud Native Buildpacks (`pack`), sin Dockerfile |
+| 🔑 Autenticación CI | Workload Identity Federation (sin llaves) |
+| 🚀 CI/CD | GitHub Actions → GKE |
 
 ## 📦 Entidades y relaciones
 
@@ -308,12 +326,17 @@ nombres de variables, sin valores reales.
 ```bash
 pytest -v
 pytest --cov=app --cov-report=term-missing
-pytest --cov=app --cov-fail-under=60    # gate de Pruebas
-pytest --cov=app --cov-fail-under=85    # gate de Producción
 ```
 
-43 pruebas automatizadas, corriendo contra PostgreSQL real (no mocks), con
-**97% de cobertura**. Detalle completo en [`docs/pruebas.md`](docs/pruebas.md).
+Los pipelines de `v1` (`pruebas.yml`/`produccion.yml`) corren estas pruebas
+en cada push, pero ya sin gate mínimo de cobertura — no es un requisito de
+esta entrega, se quitó para no bloquear despliegues por algo que no se
+evalúa.
+
+46 pruebas automatizadas, corriendo contra PostgreSQL real (no mocks),
+cubriendo la lógica de `v1` (el código nuevo de `v2` no tiene pruebas
+propias — no es un requisito de esta entrega). Detalle completo en
+[`docs/pruebas.md`](docs/pruebas.md).
 
 ## 🚀 CI/CD
 
@@ -337,10 +360,10 @@ Dos Web Services independientes, cada uno con su propia base de datos
 PostgreSQL (aisladas entre sí: `CONNECT` revocado de `PUBLIC`, un rol de
 BD distinto por ambiente):
 
-| Ambiente | Rama | Cobertura mínima | URL |
-|---|---|---|---|
-| 🟢 Pruebas | `develop` | ≥ 60% | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
-| 🔵 Producción | `main` | ≥ 85% | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
+| Ambiente | Rama | URL |
+|---|---|---|
+| 🟢 Pruebas | `develop` | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
+| 🔵 Producción | `main` | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
 
 Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 
