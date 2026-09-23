@@ -48,9 +48,6 @@ jobs:
       - name: Formato (Black)
         run: black --check .
 
-      - name: Build de la imagen Docker
-        run: docker build -t statsnostra-api .
-
   deploy:
     name: Despliegue al ambiente correspondiente (Pruebas)
     needs: test

@@ -12,9 +12,11 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
+from app.core.logging_config import configurar_logging
 from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
 
 settings = get_settings()
+configurar_logging(settings.log_level)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 
