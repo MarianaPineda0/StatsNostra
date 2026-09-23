@@ -23,11 +23,43 @@ su predicción una vez el partido finaliza.
 
 | | Ambiente | URL |
 |---|---|---|
-| 🟢 | **Pruebas** — API | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
+| ☸️ | **Entrega 2** — API en GKE (GCP) | [34.57.56.128](http://34.57.56.128) |
+| 🟢 | **Pruebas** — API (Render, Entrega 1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
-| 🔵 | **Producción** — API | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
+| 🔵 | **Producción** — API (Render, Entrega 1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
 | 📘 | **Producción** — Swagger | [statsnostra-produccion.onrender.com/docs](https://statsnostra-produccion.onrender.com/docs) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
+
+## ☸️ Entrega 2 — Arquitectura multicloud
+
+| API | Nube | Componente transversal |
+|---|---|---|
+| StatsNostra (esta) | Google Cloud — GKE | Caché Distribuida (Memorystore / Redis) |
+| trading-journal | Oracle Cloud (datos) + Azure AKS (cómputo) | Object Storage |
+| ecommerce | AWS — EKS | MS Orquestador + Cola/Tópico |
+
+```mermaid
+flowchart TB
+    Cliente[Cliente / Postman] --> Orq[MS Orquestador · ecommerce · AWS]
+    Orq --> GCP[StatsNostra · GCP]
+    Orq --> AWS[ecommerce · AWS]
+    Orq --> OCI[trading-journal · OCI/Azure]
+
+    GCP -- GET RANDOM --> AWS
+    GCP -- GET RANDOM --> OCI
+
+    GCP --> CloudSQL[(Cloud SQL)]
+    GCP --> Redis[(Memorystore / Redis)]
+    GCP --> Monitoring[Cloud Monitoring + Logging + Alerting]
+```
+
+**StatsNostra en GCP:**
+- Despliegue: GKE, 2 nodos, 2 réplicas, `HorizontalPodAutoscaler` (2-4, 70% CPU), probes de liveness/readiness, `requests`/`limits`, `ConfigMap` + `Secret` (ver [`k8s/`](k8s/)).
+- `api/v1` y `api/v2`: CRUD completo para Apostador, Partido y Predicción. El `GetById` de `v2` agrega un `Trade` de trading-journal y un `Comercio` de ecommerce, en tiempo real, GET RANDOM, sin datos quemados.
+- Trace-id: header `X-Trace-Id` (UUID), propagado en toda llamada saliente — confirmado end-to-end con trading-journal y con el orquestador.
+- Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce.
+- Observabilidad: Cloud Monitoring + Cloud Logging (JSON con `trace_id`) + alerta de 5xx a correo, probada con una falla real.
+- Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
 
 > ⏱️ Los servicios gratuitos de Render "duermen" tras 15 min de
 > inactividad — la primera petición puede tardar ~50 s en responder
