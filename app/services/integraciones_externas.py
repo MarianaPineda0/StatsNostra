@@ -9,10 +9,10 @@ from app.integrations.cliente_externo import obtener_aleatorio
 def _con_cache(settings: Settings, clave: str, url_base: str, ruta: str) -> dict | None:
     en_cache = obtener_del_cache(settings, clave)
     if en_cache is not None:
-        cache_aciertos.inc()
+        cache_aciertos.add(1)
         return json.loads(en_cache)
 
-    cache_fallos.inc()
+    cache_fallos.add(1)
     dato = obtener_aleatorio(url_base, ruta)
     if dato is not None:
         guardar_en_cache(settings, clave, json.dumps(dato))
