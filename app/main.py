@@ -5,6 +5,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import (
     apostadores,
     apostadores_v2,
+    cache,
     consultas,
     partidos,
     partidos_v2,
@@ -15,11 +16,19 @@ from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.core.logging_config import configurar_logging
 from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
+from app.core.tracing import configurar_tracing
 
 settings = get_settings()
 configurar_logging(settings.log_level)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
+configurar_tracing(
+    app,
+    settings.grafana_otlp_endpoint,
+    settings.grafana_otlp_user,
+    settings.grafana_otlp_token,
+    settings.otel_service_name,
+)
 
 app.add_middleware(MetodoOverrideMiddleware)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
@@ -33,7 +42,7 @@ app.include_router(consultas.router)
 
 # Alias /api/v1 de las mismas rutas de arriba (mismo router, sin logica
 # duplicada) para cumplir la convencion de versionado acordada con el
-# grupo en la Entrega 2, sin romper las rutas sin prefijo ya existentes.
+# grupo, sin romper las rutas sin prefijo ya existentes.
 app.include_router(apostadores.router, prefix="/api/v1")
 app.include_router(partidos.router, prefix="/api/v1")
 app.include_router(predicciones.router, prefix="/api/v1")
@@ -42,6 +51,7 @@ app.include_router(consultas.router, prefix="/api/v1")
 app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
+app.include_router(cache.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.

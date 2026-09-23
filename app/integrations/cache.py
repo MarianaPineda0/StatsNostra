@@ -43,3 +43,16 @@ def guardar_en_cache(settings: Settings, clave: str, valor: str) -> None:
         cliente.set(clave, valor, ex=TTL_SEGUNDOS)
     except redis.RedisError as exc:
         logger.warning("Redis no disponible al guardar %s: %s", clave, exc)
+
+
+def invalidar_cache(settings: Settings, clave: str) -> None:
+    """Invalidacion explicita, complementaria al TTL: fuerza que el proximo
+    request vuelva a traer el dato mas reciente del compañero en vez de
+    esperar a que expiren los 30s."""
+    cliente = _obtener_cliente(settings)
+    if cliente is None:
+        return
+    try:
+        cliente.delete(clave)
+    except redis.RedisError as exc:
+        logger.warning("Redis no disponible al invalidar %s: %s", clave, exc)
