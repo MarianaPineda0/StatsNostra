@@ -1,6 +1,7 @@
 import json
 
 from app.core.config import Settings
+from app.core.metrics import cache_aciertos, cache_fallos
 from app.integrations.cache import guardar_en_cache, obtener_del_cache
 from app.integrations.cliente_externo import obtener_aleatorio
 
@@ -8,8 +9,10 @@ from app.integrations.cliente_externo import obtener_aleatorio
 def _con_cache(settings: Settings, clave: str, url_base: str, ruta: str) -> dict | None:
     en_cache = obtener_del_cache(settings, clave)
     if en_cache is not None:
+        cache_aciertos.inc()
         return json.loads(en_cache)
 
+    cache_fallos.inc()
     dato = obtener_aleatorio(url_base, ruta)
     if dato is not None:
         guardar_en_cache(settings, clave, json.dumps(dato))

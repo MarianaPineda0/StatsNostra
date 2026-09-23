@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.routes import (
     apostadores,
@@ -41,6 +42,10 @@ app.include_router(consultas.router, prefix="/api/v1")
 app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
+
+# Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
+# expuestas en /metrics para Prometheus/Grafana.
+Instrumentator().instrument(app).expose(app)
 
 
 # Traduce las excepciones de dominio (levantadas en los servicios) a

@@ -19,12 +19,18 @@ ejecuciones, aunque comparta la misma BD que se usa para desarrollo manual.
 📈 Cobertura total: 97.18%
 ```
 
-Ambos quality gates de la rúbrica, verificados localmente:
+> Los gates de cobertura (`--cov-fail-under=60/85`) de abajo aplicaban a
+> esta versión de la API — se quitaron de los pipelines más adelante,
+> porque dejaron de ser un requisito. Se conservan aquí como evidencia de
+> que sí pasaron en su momento.
 
 ```bash
-pytest --cov=app --cov-fail-under=60   # Pruebas -> pasa
-pytest --cov=app --cov-fail-under=85   # Produccion -> pasa
+pytest --cov=app --cov-fail-under=60   # Pruebas -> pasaba
+pytest --cov=app --cov-fail-under=85   # Produccion -> pasaba
 ```
+
+Hoy la suite tiene 46 pruebas (se sumaron 3 de PATCH); el código nuevo de
+`v2` no tiene pruebas propias — no es un requisito de esta entrega.
 
 ## ✅ Qué se prueba
 
