@@ -4,35 +4,41 @@ API RESTful de predicciones deportivas. Los usuarios (apostadores) predicen
 el marcador de partidos y acumulan puntos según qué tan acertada haya sido
 su predicción una vez el partido finaliza.
 
+**v1**
 <p>
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12"/>
   <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
   <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
   <img src="https://img.shields.io/badge/SQLAlchemy-2.x-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy"/>
   <img src="https://img.shields.io/badge/Alembic-Migrations-8A2BE2?style=for-the-badge" alt="Alembic"/>
-</p>
-<p>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
-  <img src="https://img.shields.io/badge/Docker%20Compose-Orquestado-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Compose"/>
-  <img src="https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
   <img src="https://img.shields.io/badge/Render-Deploy-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render"/>
-  <img src="https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
-  <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
   <img src="https://img.shields.io/badge/Pytest-97%25%20coverage-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest coverage"/>
 </p>
+
+**v2**
+<p>
+  <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
+  <img src="https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/Redis-Memorystore-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
+  <img src="https://img.shields.io/badge/Prometheus-Metricas-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" alt="Prometheus"/>
+  <img src="https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+</p>
+
+**GitHub Actions** aparece en las dos: `pruebas.yml`/`produccion.yml` (v1 → Render) y `despliegue-gke.yml` (v2 → GKE).
 
 ## 🔗 Enlaces en vivo
 
 | | Ambiente | URL |
 |---|---|---|
-| ☸️ | **Entrega 2** — API en GKE (GCP) | [34.57.56.128](http://34.57.56.128) |
-| 🟢 | **Pruebas** — API (Render, Entrega 1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
+| ☸️ | **GKE** — API (v1 + v2) | [34.57.56.128](http://34.57.56.128) |
+| 🟢 | **Pruebas** — API (Render, solo v1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
-| 🔵 | **Producción** — API (Render, Entrega 1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
+| 🔵 | **Producción** — API (Render, solo v1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
 | 📘 | **Producción** — Swagger | [statsnostra-produccion.onrender.com/docs](https://statsnostra-produccion.onrender.com/docs) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
 
-## ☸️ Entrega 2 — Arquitectura multicloud
+## ☸️ Arquitectura multicloud
 
 | API | Nube | Componente transversal |
 |---|---|---|
@@ -63,16 +69,30 @@ flowchart TB
 - Observabilidad: Cloud Monitoring + Cloud Logging (JSON con `trace_id`) + alerta de 5xx a correo, probada con una falla real.
 - Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
 
+### Servicios de GCP usados
+
+| Servicio | Para qué |
+|---|---|
+| **Google Kubernetes Engine (GKE)** | Clúster (2 nodos), despliegue de la API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
+| **Compute Engine** | VMs que forman los nodos del clúster GKE |
+| **Cloud SQL (PostgreSQL)** | Base de datos, conectada desde el clúster vía sidecar (Cloud SQL Auth Proxy) |
+| **Memorystore (Redis)** | Caché Distribuida de las respuestas de trading-journal y ecommerce |
+| **Artifact Registry** | Almacena la imagen de la API construida con Buildpacks |
+| **Cloud Build** | Construcción de imágenes con Buildpacks en pruebas manuales |
+| **Cloud Logging** | Logs en JSON con `trace_id`, consultables por petición |
+| **Cloud Monitoring** | Métricas nativas, y la alerta de 5xx a correo |
+| **IAM + Workload Identity Federation** | Autenticación del pipeline de GitHub Actions sin llaves de servicio |
+
 > ⏱️ Los servicios gratuitos de Render "duermen" tras 15 min de
 > inactividad — la primera petición puede tardar ~50 s en responder
 > mientras arrancan de nuevo. No es un error.
 
 ## 🎯 Objetivo
 
-Proyecto de la materia **Énfasis I: DevOps**. Entrega 1: API REST real con
-persistencia en PostgreSQL, contenerización con Docker, dos ambientes
-independientes (Pruebas/Producción) en Render con CI/CD en GitHub Actions.
-Entrega 2: arquitectura multicloud junto con otras dos APIs del curso
+Proyecto de la materia **Énfasis I: DevOps**. `v1` es una API REST propia
+con persistencia en PostgreSQL, dos ambientes independientes
+(Pruebas/Producción) en Render con CI/CD en GitHub Actions. `v2` suma una
+arquitectura multicloud junto con otras dos APIs del curso
 (`trading-journal` en OCI/Azure, `ecommerce` en AWS) — esta API corre en
 GKE (GCP), consume entidades reales de las otras dos en tiempo real,
 propaga un trace-id entre las tres nubes, y agrega caché distribuida,
@@ -184,14 +204,20 @@ PUT y PATCH usan el mismo handler y el mismo schema de actualización (todos los
 campos opcionales), así que ambos aceptan una actualización parcial —
 solo se distinguen por el verbo HTTP.
 
-### 🌍 `/api/v1` y `/api/v2` (Entrega 2)
+## 🌍 v1 vs v2
 
 Los endpoints de arriba también están disponibles bajo `/api/v1/...`
-(alias, mismo código, misma lógica) — convención acordada con el grupo.
+(alias, mismo código, misma lógica) — convención de versionado acordada
+con el grupo. `/api/v2` es una versión nueva y separada, no un reemplazo.
 
-`/api/v2` replica el mismo CRUD, pero el `GetById` de cada entidad agrega
-en tiempo real un `Trade` de `trading-journal` y un `Comercio` de
-`ecommerce` (registro al azar de su lista, nunca fijo, nunca quemado):
+| | `v1` | `v2` |
+|---|---|---|
+| Prefijo | `/apostadores` · `/api/v1/apostadores` | `/api/v2/apostadores` |
+| Crear, listar, actualizar, eliminar | ✅ | ✅ idéntico a `v1`, sin agregación |
+| `GET /{id}` | Solo tu propia entidad | Tu entidad **+** un `Trade` de `trading-journal` **+** un `Comercio` de `ecommerce`, obtenidos en tiempo real |
+| Origen del dato externo | — | Registro al azar de la lista del compañero (GET RANDOM) — nunca fijo, nunca quemado |
+| Si el compañero está caído | — | El campo sale en `null`; tu API no se cae |
+| Caché | — | Respuesta externa cacheada 30s (Redis) antes de volver a llamar |
 
 ```
 GET /api/v2/apostadores/{id}
@@ -199,8 +225,14 @@ GET /api/v2/partidos/{id}
 GET /api/v2/predicciones/{id}
 ```
 
-El resto del CRUD en `v2` (crear, listar, actualizar, eliminar) es idéntico
-a `v1`, sin agregación.
+**Ejemplo real, `GET /api/v2/apostadores/7`:**
+```json
+{
+  "apostador": {"id": 7, "nombre": "Mariana Pineda", "username": "mari_pine", "email": "mariana@gmail.com", "activo": true},
+  "trading_journal_trade": {"id": 21, "contract": "MNQU26", "direction": "LONG", "size": 1, "open": true},
+  "ecommerce_comercio": {"nit": 238479238, "legalName": "Amazon S.A", "email": "amazon@amazon.com"}
+}
+```
 
 ### 🔍 Método QUERY
 
@@ -228,7 +260,7 @@ Persistencia real en PostgreSQL — no se usa `Base.metadata.create_all()`
 como mecanismo de creación de tablas en ningún ambiente; todo el esquema se
 gestiona con migraciones de Alembic (`migrations/versions/`).
 
-## 🐳 Docker (Entrega 1, desarrollo local)
+## 🐳 Docker (desarrollo local)
 
 ```bash
 docker compose up --build
@@ -238,9 +270,9 @@ Levanta la API y PostgreSQL juntos, aplica las migraciones automáticamente,
 y deja la API disponible en `http://localhost:8000`. Detalle completo en
 [`docs/docker.md`](docs/docker.md).
 
-`Dockerfile` y `docker-compose.yml` quedan como base para correr el
-proyecto en tu máquina; el despliegue de la Entrega 2 (GKE) no los usa —
-la imagen se construye con Buildpacks (ver CI/CD abajo).
+`Dockerfile` y `docker-compose.yml` son para correr el proyecto en tu
+máquina; el despliegue en GKE no los usa — la imagen se construye con
+Buildpacks (ver CI/CD abajo).
 
 ## ⚙️ Instalación y ejecución local
 
@@ -289,9 +321,9 @@ Tres pipelines en GitHub Actions:
 
 | Pipeline | Rama | Qué hace |
 |---|---|---|
-| ⚙️ `pruebas.yml` | `develop` | Pruebas + lint → despliegue a Render (Entrega 1) |
-| ⚙️ `produccion.yml` | `main` | Pruebas + lint → despliegue a Render (Entrega 1) |
-| ☸️ `despliegue-gke.yml` | `develop` | Build con Buildpacks → Artifact Registry → despliegue automático a GKE (Entrega 2) |
+| ⚙️ `pruebas.yml` | `develop` | Pruebas + lint → despliegue a Render |
+| ⚙️ `produccion.yml` | `main` | Pruebas + lint → despliegue a Render |
+| ☸️ `despliegue-gke.yml` | `develop` | Build con Buildpacks → Artifact Registry → despliegue automático a GKE |
 
 `despliegue-gke.yml` se autentica sin llaves (Workload Identity Federation)
 y construye la imagen sin Cloud Build ni Docker: usa `pack` directo en el
@@ -299,7 +331,7 @@ runner, publica en Artifact Registry, y actualiza el `Deployment` en el
 clúster (`kubectl set image` + `rollout status`). Ver [`docs/ci-cd.md`](docs/ci-cd.md)
 para el detalle de los pipelines de Render.
 
-## ☁️ Ambientes (Render, Entrega 1)
+## ☁️ Ambientes (Render)
 
 Dos Web Services independientes, cada uno con su propia base de datos
 PostgreSQL (aisladas entre sí: `CONNECT` revocado de `PUBLIC`, un rol de
@@ -315,8 +347,8 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 ## 📚 Documentación adicional
 
 - 🏗️ [`docs/arquitectura.md`](docs/arquitectura.md)
-- 🐳 [`docs/docker.md`](docs/docker.md) (Entrega 1)
-- 🚀 [`docs/ci-cd.md`](docs/ci-cd.md) (Entrega 1)
-- ☁️ [`docs/render.md`](docs/render.md) (Entrega 1)
+- 🐳 [`docs/docker.md`](docs/docker.md)
+- 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)
+- ☁️ [`docs/render.md`](docs/render.md)
 - 🧪 [`docs/pruebas.md`](docs/pruebas.md)
-- ☸️ [`k8s/`](k8s/) — manifiestos de GKE (Entrega 2)
+- ☸️ [`k8s/`](k8s/) — manifiestos de GKE
