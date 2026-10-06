@@ -22,3 +22,8 @@ resource "google_sql_database_instance" "api" {
 
   depends_on = [google_project_service.apis]
 }
+
+resource "google_sql_database" "api" {
+  name     = "statsnostra_v3"
+  instance = google_sql_database_instance.api.name
+}
