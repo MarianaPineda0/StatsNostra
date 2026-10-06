@@ -19,5 +19,5 @@ variable "zone" {
 variable "nombre" {
   description = "Prefijo de los recursos creados"
   type        = string
-  default     = "statsnostra"
+  default     = "statsnostra-v3"
 }
