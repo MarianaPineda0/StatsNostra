@@ -5,6 +5,7 @@ locals {
     "sqladmin.googleapis.com",
     "redis.googleapis.com",
     "artifactregistry.googleapis.com",
+    "secretmanager.googleapis.com",
   ]
 }
 
