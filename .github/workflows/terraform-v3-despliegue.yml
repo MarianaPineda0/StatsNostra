@@ -128,3 +128,20 @@ jobs:
             envsubst '${LB_IP} ${REDIS_HOST} ${CLOUDSQL_CONNECTION_NAME} ${IMAGE}' < k8s/$archivo.yaml | kubectl apply -f -
           done
           kubectl rollout status deployment/statsnostra-api --timeout=300s
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cloud SQL no tiene puerto abierto: el runner llega por el proxy, igual que los pods
+      - name: Migraciones de Alembic
+        run: |
+          curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --port 5432 ${{ needs.infraestructura.outputs.cloudsql_conexion }} &
+          sleep 8
+          CLAVE=$(gcloud secrets versions access latest --secret=${{ needs.infraestructura.outputs.secreto_db }})
+          echo "::add-mask::$CLAVE"
+          pip install -r requirements.txt
+          DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" alembic upgrade head
