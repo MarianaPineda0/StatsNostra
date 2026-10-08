@@ -48,3 +48,22 @@ construyó en la v2.
 - **Terraform 1.11 o superior** → `terraform version`
 - **Google Cloud CLI** con sesión iniciada → `gcloud auth application-default login`
 - Un **proyecto de GCP** con facturación activa y permisos de propietario
+
+## 🪣 Paso 1 · Bucket para el estado (una sola vez)
+
+Terraform guarda lo que ha creado en un archivo de **estado**. Para que lo usen
+tanto tu computador como el pipeline, vive en un bucket de Cloud Storage. Este
+bucket se crea a mano y **no** forma parte del `destroy`, así el estado
+sobrevive aunque la infraestructura se borre.
+
+```bash
+gcloud storage buckets create gs://statsnostra-v3-estado-3f57bb8c \
+  --project=project-3f57bb8c-371e-4b9c-949 \
+  --location=us-central1 \
+  --uniform-bucket-level-access \
+  --public-access-prevention
+
+gcloud storage buckets update gs://statsnostra-v3-estado-3f57bb8c --versioning
+```
+
+El versionado permite recuperar un estado anterior si algo sale mal.
