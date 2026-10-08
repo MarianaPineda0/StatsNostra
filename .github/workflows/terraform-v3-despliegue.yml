@@ -19,6 +19,14 @@ jobs:
   infraestructura:
     name: Infraestructura con Terraform
     runs-on: ubuntu-latest
+    # Datos que el job de la aplicación necesita para desplegar sobre esta infraestructura
+    outputs:
+      ip_api: ${{ steps.salidas.outputs.ip_api }}
+      cluster: ${{ steps.salidas.outputs.cluster }}
+      redis_host: ${{ steps.salidas.outputs.redis_host }}
+      cloudsql_conexion: ${{ steps.salidas.outputs.cloudsql_conexion }}
+      repositorio_imagenes: ${{ steps.salidas.outputs.repositorio_imagenes }}
+      secreto_db: ${{ steps.salidas.outputs.secreto_db }}
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
@@ -56,3 +64,11 @@ jobs:
       - name: Terraform apply
         working-directory: terraform
         run: terraform apply -input=false -auto-approve
+
+      - name: Leer outputs de terraform
+        id: salidas
+        working-directory: terraform
+        run: |
+          for nombre in ip_api cluster redis_host cloudsql_conexion repositorio_imagenes secreto_db; do
+            echo "$nombre=$(terraform output -raw $nombre)" >> "$GITHUB_OUTPUT"
+          done
