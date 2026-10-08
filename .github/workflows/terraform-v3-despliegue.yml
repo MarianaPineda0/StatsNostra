@@ -115,3 +115,16 @@ jobs:
           kubectl create secret generic statsnostra-secrets \
             --from-literal=DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      # envsubst solo reemplaza estas variables; el Secret de ejemplo no se aplica
+      - name: Aplicar los manifiestos de k8s
+        env:
+          LB_IP: ${{ needs.infraestructura.outputs.ip_api }}
+          REDIS_HOST: ${{ needs.infraestructura.outputs.redis_host }}
+          CLOUDSQL_CONNECTION_NAME: ${{ needs.infraestructura.outputs.cloudsql_conexion }}
+          IMAGE: ${{ env.IMAGEN }}
+        run: |
+          for archivo in configmap deployment service hpa; do
+            envsubst '${LB_IP} ${REDIS_HOST} ${CLOUDSQL_CONNECTION_NAME} ${IMAGE}' < k8s/$archivo.yaml | kubectl apply -f -
+          done
+          kubectl rollout status deployment/statsnostra-api --timeout=300s
