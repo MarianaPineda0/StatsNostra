@@ -22,3 +22,22 @@ jobs:
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
+      # Sin llaves JSON: GitHub se identifica ante GCP con Workload Identity Federation
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      # Sin wrapper para poder leer los outputs con terraform output -raw
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.0
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -backend-config="bucket=${{ env.BUCKET_ESTADO }}"
