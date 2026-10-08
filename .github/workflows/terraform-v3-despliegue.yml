@@ -145,3 +145,24 @@ jobs:
           echo "::add-mask::$CLAVE"
           pip install -r requirements.txt
           DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" alembic upgrade head
+
+      # El balanceador puede tardar unos minutos en responder, por eso se reintenta
+      - name: Prueba de humo
+        run: |
+          IP=${{ needs.infraestructura.outputs.ip_api }}
+          for intento in $(seq 1 30); do
+            if curl -fsS "http://$IP/health"; then
+              echo "API v3 arriba en http://$IP"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "El API no respondió a tiempo"
+          exit 1
+
+      - name: Resumen
+        run: |
+          IP=${{ needs.infraestructura.outputs.ip_api }}
+          echo "### API v3 desplegada" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API: http://$IP" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Swagger: http://$IP/docs" >> "$GITHUB_STEP_SUMMARY"
