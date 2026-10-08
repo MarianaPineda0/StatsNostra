@@ -97,3 +97,30 @@ Al terminar, `terraform output` entrega los datos que usa el despliegue:
 
 > 🔒 **La contraseña de la base nunca aparece** en el código, en el estado ni en
 > los logs: Terraform la genera al vuelo y la guarda directo en Secret Manager.
+
+## 🧹 Paso 3 · Destruir todo (para no gastar crédito)
+
+Después de la sustentación hay que borrar la infraestructura. Hay un detalle
+importante: el `Service` de Kubernetes crea un balanceador de GCP por fuera de
+Terraform, y si sigue vivo bloquea la liberación de la IP. Por eso **primero se
+borra el Service y después se destruye**.
+
+| | Comando | Qué hace |
+|---|---|---|
+| 1️⃣ | `gcloud container clusters get-credentials statsnostra-v3-gke --zone us-central1-a` | 🔑 Conecta `kubectl` con el clúster |
+| 2️⃣ | `kubectl delete service statsnostra-api-service` | ⚖️ Libera el balanceador y la IP |
+| 3️⃣ | `terraform destroy` | 💥 Borra clúster, bases de datos, Redis, imagen, IP y secreto |
+
+> 🛡️ El bucket del estado **no se borra** con el `destroy`: es del Paso 1 y se
+> creó a mano, para que el estado sobreviva.
+
+Para comprobar que no queda nada que cobre:
+
+```bash
+gcloud container clusters list
+gcloud sql instances list
+gcloud redis instances list --region=us-central1
+gcloud compute addresses list
+```
+
+Las cuatro listas deben salir vacías.
