@@ -67,3 +67,33 @@ gcloud storage buckets update gs://statsnostra-v3-estado-3f57bb8c --versioning
 ```
 
 El versionado permite recuperar un estado anterior si algo sale mal.
+
+## 🚀 Paso 2 · Crear la infraestructura
+
+Desde esta carpeta (`terraform/`) son tres comandos:
+
+| | Comando | Qué hace |
+|---|---|---|
+| 1️⃣ | `terraform init -backend-config="bucket=statsnostra-v3-estado-3f57bb8c"` | 📥 Descarga los providers y conecta con el bucket del estado |
+| 2️⃣ | `terraform plan` | 👀 Muestra qué se va a crear, sin tocar nada |
+| 3️⃣ | `terraform apply` | 🏗️ Crea todo. Tarda de 10 a 15 minutos, GKE es lo más lento |
+
+> ⚙️ ¿Quieres cambiar la región, el prefijo o el proyecto? Copia
+> `terraform.tfvars.example` a `terraform.tfvars` y edítalo. Ese archivo está en
+> el `.gitignore`, así que no se sube al repositorio.
+
+### 📤 Lo que devuelve Terraform
+
+Al terminar, `terraform output` entrega los datos que usa el despliegue:
+
+| Output | 🎯 Para qué sirve |
+|---|---|
+| `ip_api` | 📍 Dirección pública donde queda el API |
+| `cluster` | ☸️ Clúster al que se conecta `kubectl` |
+| `redis_host` | ⚡ IP privada de Redis (variable `REDIS_HOST`) |
+| `cloudsql_conexion` | 🐘 Nombre de conexión del Cloud SQL Proxy |
+| `repositorio_imagenes` | 📦 Ruta donde se sube la imagen Docker |
+| `secreto_db` | 🔐 Secreto que guarda la contraseña de la base |
+
+> 🔒 **La contraseña de la base nunca aparece** en el código, en el estado ni en
+> los logs: Terraform la genera al vuelo y la guarda directo en Secret Manager.
