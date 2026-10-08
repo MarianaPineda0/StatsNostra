@@ -1,0 +1,24 @@
+name: Despliegue v3 con Terraform
+
+# Manual a propósito: cada ejecución crea GKE, Cloud SQL y Redis, que consumen crédito
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  BUCKET_ESTADO: statsnostra-v3-estado-3f57bb8c
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+
+jobs:
+  infraestructura:
+    name: Infraestructura con Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
