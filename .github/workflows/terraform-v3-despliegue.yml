@@ -72,3 +72,34 @@ jobs:
           for nombre in ip_api cluster redis_host cloudsql_conexion repositorio_imagenes secreto_db; do
             echo "$nombre=$(terraform output -raw $nombre)" >> "$GITHUB_OUTPUT"
           done
+
+  aplicacion:
+    name: Instalar el API v3 en GKE
+    needs: infraestructura
+    runs-on: ubuntu-latest
+    env:
+      IMAGEN: ${{ needs.infraestructura.outputs.repositorio_imagenes }}/statsnostra-api-v3:${{ github.sha }}
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Autenticar Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - uses: buildpacks/github-actions/setup-pack@v5.9.2
+
+      # Buildpacks lee el Procfile y construye la imagen sin necesidad de Dockerfile
+      - name: Construir y publicar la imagen
+        run: pack build "$IMAGEN" --builder=gcr.io/buildpacks/builder:latest --publish
