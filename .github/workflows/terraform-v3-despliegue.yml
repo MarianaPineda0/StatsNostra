@@ -103,3 +103,15 @@ jobs:
       # Buildpacks lee el Procfile y construye la imagen sin necesidad de Dockerfile
       - name: Construir y publicar la imagen
         run: pack build "$IMAGEN" --builder=gcr.io/buildpacks/builder:latest --publish
+
+      - name: Conectar al clúster
+        run: gcloud container clusters get-credentials ${{ needs.infraestructura.outputs.cluster }} --zone=${{ env.REGION }}-a
+
+      # La contraseña se lee de Secret Manager y se enmascara para que no salga en el log
+      - name: Crear el Secret de Kubernetes
+        run: |
+          CLAVE=$(gcloud secrets versions access latest --secret=${{ needs.infraestructura.outputs.secreto_db }})
+          echo "::add-mask::$CLAVE"
+          kubectl create secret generic statsnostra-secrets \
+            --from-literal=DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" \
+            --dry-run=client -o yaml | kubectl apply -f -
