@@ -41,3 +41,14 @@ jobs:
       - name: Terraform init
         working-directory: terraform
         run: terraform init -backend-config="bucket=${{ env.BUCKET_ESTADO }}"
+
+      - name: Formato y validación
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+
+      # El plan queda en el log para revisar qué se va a crear antes del apply
+      - name: Terraform plan
+        working-directory: terraform
+        run: terraform plan -input=false
