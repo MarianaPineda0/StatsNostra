@@ -242,10 +242,10 @@ Consultas de ejemplo:
 
 ### 🎬 Demostración en vivo
 
-Base: `http://34.57.56.128`.
+Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue o con `terraform output ip_api`).
 
 1. **Flujo entre nubes y trace-id.**
-   `curl -H "X-Trace-Id: demo-001" http://34.57.56.128/api/v2/apostadores/7`
+   `curl -H "X-Trace-Id: demo-001" http://<IP_API>/api/v2/apostadores/7`
    devuelve el apostador más un `Trade` (OCI) y un `Comercio` (AWS) reales. En
    el dashboard, el panel de trazas que cruzan las tres nubes muestra la traza
    y el panel de logs, con `trace_id = demo-001`, sus líneas.
@@ -255,7 +255,7 @@ Base: `http://34.57.56.128`.
    30 s; `DELETE /api/v2/cache/ecommerce` (o `trading_journal`) fuerza a traer
    el dato nuevo en la siguiente petición.
 3. **Escalamiento del clúster.** Generar carga
-   (`for i in $(seq 1 15); do (while true; do curl -s -o /dev/null http://34.57.56.128/api/v2/apostadores/7; done) & done`)
+   (`for i in $(seq 1 15); do (while true; do curl -s -o /dev/null http://<IP_API>/api/v2/apostadores/7; done) & done`)
    y observar `kubectl get hpa statsnostra-api-hpa -w` y
    `kubectl get pods -l app=statsnostra-api`: pasa de 2 a 4 réplicas al superar
    el 70 % de CPU. Detener la carga con `kill $(jobs -p)`.
