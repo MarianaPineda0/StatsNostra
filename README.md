@@ -26,13 +26,24 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
 </p>
 
-**GitHub Actions** aparece en las dos: `pruebas.yml`/`produccion.yml` (v1 → Render) y `despliegue-gke.yml` (v2 → GKE).
+**v3**
+<p>
+  <img src="https://img.shields.io/badge/Terraform-IaC-844FBA?style=for-the-badge&logo=terraform&logoColor=white" alt="Terraform"/>
+  <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
+  <img src="https://img.shields.io/badge/Cloud%20SQL-PostgreSQL%2016-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="Cloud SQL"/>
+  <img src="https://img.shields.io/badge/Redis-Memorystore-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
+  <img src="https://img.shields.io/badge/Secret%20Manager-Secretos-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Secret Manager"/>
+  <img src="https://img.shields.io/badge/GitHub%20Actions-Despliegue%20y%20destrucci%C3%B3n-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+</p>
+
+**GitHub Actions** aparece en las tres: `pruebas.yml`/`produccion.yml` (v1 → Render), `despliegue-gke.yml` (v2 → GKE, retirado en la v3) y `terraform-v3-despliegue.yml`/`terraform-v3-destruir.yml` (v3 → infraestructura con Terraform).
 
 ## 🔗 Enlaces en vivo
 
 | | Ambiente | URL |
 |---|---|---|
-| ☸️ | **GKE** — API (v1 + v2) | [34.57.56.128](http://34.57.56.128) |
+| ☸️ | **GKE (v3)** — API (v1 + v2) | La IP la entrega el workflow `Despliegue v3 con Terraform` en su resumen; la infraestructura se destruye al terminar la sustentación |
+| 🏗️ | **Infraestructura v3** — Terraform | [`terraform/`](terraform/) |
 | 🟢 | **Pruebas** — API (Render, solo v1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
 | 🔵 | **Producción** — API (Render, solo v1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
@@ -40,6 +51,39 @@ su predicción una vez el partido finaliza.
 | 📊 | **Grafana Cloud** — Dashboard multicloud | [Multicloud - Observabilidad unificada](https://sturdyanchovy2072.grafana.net/d/mp8kfcm/multicloud-observabilidad-unificada) |
 | 🚨 | **Grafana Cloud** — Alertas | [Reglas de alerta](https://sturdyanchovy2072.grafana.net/alerting/list) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
+
+## 🏗️ Infraestructura como código (v3)
+
+En la v3 la infraestructura de Google Cloud deja de crearse a mano: **Terraform**
+la define en código y un pipeline la despliega e instala el API encima.
+
+```mermaid
+flowchart LR
+    Dev[▶️ Run workflow] --> GH[⚙️ GitHub Actions]
+    GH -->|terraform apply| GCP[☁️ Google Cloud]
+    GH -->|build + kubectl| GKE[☸️ API v3 en GKE]
+    GCP --- GKE
+```
+
+| Servicio de GCP | Archivo | Rol en la solución |
+|---|---|---|
+| ☸️ GKE | `gke.tf` | Ejecuta el API |
+| 🐘 Cloud SQL (PostgreSQL 16) | `cloudsql.tf` | Base de datos `statsnostra_v3` |
+| ⚡ Memorystore (Redis) | `redis.tf` | Caché de las respuestas |
+| 📦 Artifact Registry | `artifact_registry.tf` | Imágenes Docker |
+| 📍 IP externa estática | `ip.tf` | Dirección fija del API |
+| 🔐 Secret Manager | `secretos.tf` | Contraseña de la base de datos |
+
+- **Desplegar:** Actions → `Despliegue v3 con Terraform` → *Run workflow*.
+- **Destruir:** Actions → `Destrucción v3 con Terraform` → escribir `DESTRUIR`.
+- **Guía completa** (estado remoto, comandos manuales, outputs): [`terraform/README.md`](terraform/README.md).
+
+**Alcance de la v3:** el foco es la infraestructura como código. Por eso el
+despliegue de Terraform solo crea lo esencial (con Redis) y no configura
+Grafana Cloud ni las URLs de trading-journal y ecommerce. El código de la API
+(`v2`, caché, OpenTelemetry) sigue en el repositorio y queda inactivo cuando
+esas variables no están definidas. El pipeline de la v2 (`despliegue-gke.yml`)
+se retiró porque lo reemplazan los workflows de Terraform.
 
 ## ☸️ Arquitectura multicloud
 
@@ -76,11 +120,11 @@ flowchart TB
 - Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce, más **invalidación explícita** vía `DELETE /api/v2/cache/{entidad}` (fuera del TTL).
 - Datos de ejemplo: la BD de Cloud SQL tiene 3 apostadores, 5 partidos y 14 predicciones (uno de los partidos ya finalizado, con sus predicciones evaluadas). Se cargaron por la propia API (`POST`), no están en el código; así, cuando otra API pide una entidad de esta al azar (GET RANDOM) recibe datos y no `null`.
 - Observabilidad: ver sección dedicada abajo.
-- Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
+- Pipeline (v3): GitHub Actions → Terraform (`apply`) → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, lanzado a mano ([`.github/workflows/terraform-v3-despliegue.yml`](.github/workflows/terraform-v3-despliegue.yml)); se destruye con [`terraform-v3-destruir.yml`](.github/workflows/terraform-v3-destruir.yml).
 
 ### 📊 Observabilidad
 
-Dos capas, como pide la rúbrica: monitoreo nativo de la nube propia, y una
+Dos capas: monitoreo nativo de la nube propia, y una
 herramienta SAAS transversal compartida por las tres nubes del equipo.
 
 **Nativo (GCP):**
@@ -197,10 +241,14 @@ Consultas de ejemplo:
 
 ### 🎬 Demostración en vivo
 
-Base: `http://34.57.56.128`.
+Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue o con `terraform output ip_api`).
+
+> ℹ️ Esta demostración es la de la v2. En el despliegue v3 no se configuran las
+> APIs de los compañeros ni Grafana Cloud: `Trade` y `Comercio` salen en `null`
+> y los pasos 1 (paneles) y 4 no aplican. Los pasos 2 y 3 funcionan igual.
 
 1. **Flujo entre nubes y trace-id.**
-   `curl -H "X-Trace-Id: demo-001" http://34.57.56.128/api/v2/apostadores/7`
+   `curl -H "X-Trace-Id: demo-001" http://<IP_API>/api/v2/apostadores/7`
    devuelve el apostador más un `Trade` (OCI) y un `Comercio` (AWS) reales. En
    el dashboard, el panel de trazas que cruzan las tres nubes muestra la traza
    y el panel de logs, con `trace_id = demo-001`, sus líneas.
@@ -210,7 +258,7 @@ Base: `http://34.57.56.128`.
    30 s; `DELETE /api/v2/cache/ecommerce` (o `trading_journal`) fuerza a traer
    el dato nuevo en la siguiente petición.
 3. **Escalamiento del clúster.** Generar carga
-   (`for i in $(seq 1 15); do (while true; do curl -s -o /dev/null http://34.57.56.128/api/v2/apostadores/7; done) & done`)
+   (`for i in $(seq 1 15); do (while true; do curl -s -o /dev/null http://<IP_API>/api/v2/apostadores/7; done) & done`)
    y observar `kubectl get hpa statsnostra-api-hpa -w` y
    `kubectl get pods -l app=statsnostra-api`: pasa de 2 a 4 réplicas al superar
    el 70 % de CPU. Detener la carga con `kill $(jobs -p)`.
@@ -220,19 +268,18 @@ Base: `http://34.57.56.128`.
    (`sum(increase(http_server_duration_milliseconds_count{service_name="api-gcp", http_status_code=~"5.."}[5m]))`).
    La alerta nativa de Cloud Monitoring se dispara con 5xx reales.
 
-### Servicios de GCP usados
+### Servicios de GCP usados (v3)
 
-| Servicio | Para qué |
-|---|---|
-| **Google Kubernetes Engine (GKE)** | Clúster (2 nodos), despliegue de la API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
-| **Compute Engine** | VMs que forman los nodos del clúster GKE |
-| **Cloud SQL (PostgreSQL)** | Base de datos, conectada desde el clúster vía sidecar (Cloud SQL Auth Proxy) |
-| **Memorystore (Redis)** | Caché Distribuida de las respuestas de trading-journal y ecommerce |
-| **Artifact Registry** | Almacena la imagen de la API construida con Buildpacks |
-| **Cloud Build** | Construcción de imágenes con Buildpacks en pruebas manuales |
-| **Cloud Logging** | Logs en JSON con `trace_id`, consultables por petición |
-| **Cloud Monitoring** | Métricas nativas, y la alerta de 5xx a correo |
-| **IAM + Workload Identity Federation** | Autenticación del pipeline de GitHub Actions sin llaves de servicio |
+| Servicio | Creado con | Para qué |
+|---|---|---|
+| **Google Kubernetes Engine (GKE)** | `gke.tf` | Clúster zonal de 2 nodos `e2-medium`; corre el API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
+| **Cloud SQL (PostgreSQL 16)** | `cloudsql.tf` | Base de datos `statsnostra_v3`, a la que el API llega por el Cloud SQL Auth Proxy |
+| **Memorystore (Redis 7)** | `redis.tf` | Caché del API, en la misma red que el clúster |
+| **Artifact Registry** | `artifact_registry.tf` | Almacena la imagen del API construida con Buildpacks |
+| **Secret Manager** | `secretos.tf` | Guarda la contraseña de la base de datos; el pipeline la lee para crear el `Secret` de Kubernetes |
+| **IP externa estática** | `ip.tf` | Dirección fija del `LoadBalancer` |
+| **Cloud Storage** | a mano (una vez) | Bucket con el estado remoto de Terraform, versionado y sin acceso público |
+| **IAM + Workload Identity Federation** | a mano (una vez) | Los workflows de GitHub Actions se autentican sin llaves de servicio |
 
 > ⏱️ Los servicios gratuitos de Render "duermen" tras 15 min de
 > inactividad — la primera petición puede tardar ~50 s en responder
@@ -483,30 +530,33 @@ pytest --cov=app --cov-report=term-missing
 ```
 
 Los pipelines de `v1` (`pruebas.yml`/`produccion.yml`) corren estas pruebas
-en cada push, pero ya sin gate mínimo de cobertura — no es un requisito de
-esta entrega, se quitó para no bloquear despliegues por algo que no se
-evalúa.
+en cada push, pero ya sin gate mínimo de cobertura: se quitó para no
+bloquear los despliegues.
 
 46 pruebas automatizadas, corriendo contra PostgreSQL real (no mocks),
 cubriendo la lógica de `v1` (el código nuevo de `v2` no tiene pruebas
-propias — no es un requisito de esta entrega). Detalle completo en
+propias). Detalle completo en
 [`docs/pruebas.md`](docs/pruebas.md).
 
 ## 🚀 CI/CD
 
-Tres pipelines en GitHub Actions:
+Cuatro pipelines en GitHub Actions:
 
-| Pipeline | Rama | Qué hace |
+| Pipeline | Cuándo corre | Qué hace |
 |---|---|---|
-| ⚙️ `pruebas.yml` | `develop` | Pruebas + lint → despliegue a Render |
-| ⚙️ `produccion.yml` | `main` | Pruebas + lint → despliegue a Render |
-| ☸️ `despliegue-gke.yml` | `develop` | Build con Buildpacks → Artifact Registry → despliegue automático a GKE |
+| ⚙️ `pruebas.yml` | push a `develop` | Pruebas + lint → despliegue a Render |
+| ⚙️ `produccion.yml` | push a `main` | Pruebas + lint → despliegue a Render |
+| 🏗️ `terraform-v3-despliegue.yml` | manual | `terraform apply` → build con Buildpacks → Artifact Registry → manifiestos en GKE → migraciones → prueba de humo |
+| 💥 `terraform-v3-destruir.yml` | manual, pide escribir `DESTRUIR` | Borra el `Service` de k8s, `terraform destroy` y revisa que no queden recursos |
 
-`despliegue-gke.yml` se autentica sin llaves (Workload Identity Federation)
-y construye la imagen sin Cloud Build ni Docker: usa `pack` directo en el
-runner, publica en Artifact Registry, y actualiza el `Deployment` en el
-clúster (`kubectl set image` + `rollout status`). Ver [`docs/ci-cd.md`](docs/ci-cd.md)
-para el detalle de los pipelines de Render.
+Los dos pipelines de Terraform se autentican sin llaves (Workload Identity
+Federation). El de despliegue construye la imagen con `pack` directo en el
+runner, lee la contraseña de la base desde Secret Manager, reemplaza las
+variables de `k8s/` con `envsubst` (IP, host de Redis, imagen y conexión de
+Cloud SQL) y corre las migraciones de Alembic a través del Cloud SQL Proxy.
+Son manuales porque cada ejecución crea GKE, Cloud SQL y Redis, que consumen
+crédito. Ver [`terraform/README.md`](terraform/README.md) y, para los
+pipelines de Render, [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ## ☁️ Ambientes (Render)
 
@@ -523,6 +573,7 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 
 ## 📚 Documentación adicional
 
+- 🌍 [`terraform/README.md`](terraform/README.md)
 - 🏗️ [`docs/arquitectura.md`](docs/arquitectura.md)
 - 🐳 [`docs/docker.md`](docs/docker.md)
 - 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)

@@ -1,0 +1,4 @@
+project_id = "project-3f57bb8c-371e-4b9c-949"
+region     = "us-central1"
+zone       = "us-central1-a"
+nombre     = "statsnostra-v3"

@@ -1,0 +1,168 @@
+name: Despliegue v3 con Terraform
+
+# Manual a propósito: cada ejecución crea GKE, Cloud SQL y Redis, que consumen crédito
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  BUCKET_ESTADO: statsnostra-v3-estado-3f57bb8c
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+
+jobs:
+  infraestructura:
+    name: Infraestructura con Terraform
+    runs-on: ubuntu-latest
+    # Datos que el job de la aplicación necesita para desplegar sobre esta infraestructura
+    outputs:
+      ip_api: ${{ steps.salidas.outputs.ip_api }}
+      cluster: ${{ steps.salidas.outputs.cluster }}
+      redis_host: ${{ steps.salidas.outputs.redis_host }}
+      cloudsql_conexion: ${{ steps.salidas.outputs.cloudsql_conexion }}
+      repositorio_imagenes: ${{ steps.salidas.outputs.repositorio_imagenes }}
+      secreto_db: ${{ steps.salidas.outputs.secreto_db }}
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # Sin llaves JSON: GitHub se identifica ante GCP con Workload Identity Federation
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      # Sin wrapper para poder leer los outputs con terraform output -raw
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.0
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -backend-config="bucket=${{ env.BUCKET_ESTADO }}"
+
+      - name: Formato y validación
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+
+      # El plan queda en el log para revisar qué se va a crear antes del apply
+      - name: Terraform plan
+        working-directory: terraform
+        run: terraform plan -input=false
+
+      - name: Terraform apply
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve
+
+      - name: Leer outputs de terraform
+        id: salidas
+        working-directory: terraform
+        run: |
+          for nombre in ip_api cluster redis_host cloudsql_conexion repositorio_imagenes secreto_db; do
+            echo "$nombre=$(terraform output -raw $nombre)" >> "$GITHUB_OUTPUT"
+          done
+
+  aplicacion:
+    name: Instalar el API v3 en GKE
+    needs: infraestructura
+    runs-on: ubuntu-latest
+    env:
+      IMAGEN: ${{ needs.infraestructura.outputs.repositorio_imagenes }}/statsnostra-api-v3:${{ github.sha }}
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Autenticar Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - uses: buildpacks/github-actions/setup-pack@v5.9.2
+
+      # Buildpacks lee el Procfile y construye la imagen sin necesidad de Dockerfile
+      - name: Construir y publicar la imagen
+        run: pack build "$IMAGEN" --builder=gcr.io/buildpacks/builder:latest --publish
+
+      - name: Conectar al clúster
+        run: gcloud container clusters get-credentials ${{ needs.infraestructura.outputs.cluster }} --zone=${{ env.REGION }}-a
+
+      # La contraseña se lee de Secret Manager y se enmascara para que no salga en el log
+      - name: Crear el Secret de Kubernetes
+        run: |
+          CLAVE=$(gcloud secrets versions access latest --secret=${{ needs.infraestructura.outputs.secreto_db }})
+          echo "::add-mask::$CLAVE"
+          kubectl create secret generic statsnostra-secrets \
+            --from-literal=DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # envsubst solo reemplaza estas variables; el Secret de ejemplo no se aplica
+      - name: Aplicar los manifiestos de k8s
+        env:
+          LB_IP: ${{ needs.infraestructura.outputs.ip_api }}
+          REDIS_HOST: ${{ needs.infraestructura.outputs.redis_host }}
+          CLOUDSQL_CONNECTION_NAME: ${{ needs.infraestructura.outputs.cloudsql_conexion }}
+          IMAGE: ${{ env.IMAGEN }}
+        run: |
+          for archivo in configmap deployment service hpa; do
+            envsubst '${LB_IP} ${REDIS_HOST} ${CLOUDSQL_CONNECTION_NAME} ${IMAGE}' < k8s/$archivo.yaml | kubectl apply -f -
+          done
+          kubectl rollout status deployment/statsnostra-api --timeout=300s
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cloud SQL no tiene puerto abierto: el runner llega por el proxy, igual que los pods
+      - name: Migraciones de Alembic
+        run: |
+          curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --port 5432 ${{ needs.infraestructura.outputs.cloudsql_conexion }} &
+          sleep 8
+          CLAVE=$(gcloud secrets versions access latest --secret=${{ needs.infraestructura.outputs.secreto_db }})
+          echo "::add-mask::$CLAVE"
+          pip install -r requirements.txt
+          DATABASE_URL="postgresql+psycopg://statsnostra_app:${CLAVE}@127.0.0.1:5432/statsnostra_v3" alembic upgrade head
+
+      # El balanceador puede tardar unos minutos en responder, por eso se reintenta
+      - name: Prueba de humo
+        run: |
+          IP=${{ needs.infraestructura.outputs.ip_api }}
+          for intento in $(seq 1 30); do
+            if curl -fsS "http://$IP/health"; then
+              echo "API v3 arriba en http://$IP"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "El API no respondió a tiempo"
+          exit 1
+
+      - name: Resumen
+        run: |
+          IP=${{ needs.infraestructura.outputs.ip_api }}
+          echo "### API v3 desplegada" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API: http://$IP" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Swagger: http://$IP/docs" >> "$GITHUB_STEP_SUMMARY"

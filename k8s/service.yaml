@@ -4,7 +4,7 @@ metadata:
   name: statsnostra-api-service
 spec:
   type: LoadBalancer
-  loadBalancerIP: "34.57.56.128"
+  loadBalancerIP: "${LB_IP}"
   selector:
     app: statsnostra-api
   ports:
