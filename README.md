@@ -121,7 +121,7 @@ flowchart TB
 - Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce, más **invalidación explícita** vía `DELETE /api/v2/cache/{entidad}` (fuera del TTL).
 - Datos de ejemplo: la BD de Cloud SQL tiene 3 apostadores, 5 partidos y 14 predicciones (uno de los partidos ya finalizado, con sus predicciones evaluadas). Se cargaron por la propia API (`POST`), no están en el código; así, cuando otra API pide una entidad de esta al azar (GET RANDOM) recibe datos y no `null`.
 - Observabilidad: ver sección dedicada abajo.
-- Pipeline: GitHub Actions → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, en cada push a `develop` ([`.github/workflows/despliegue-gke.yml`](.github/workflows/despliegue-gke.yml)).
+- Pipeline (v3): GitHub Actions → Terraform (`apply`) → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, lanzado a mano ([`.github/workflows/terraform-v3-despliegue.yml`](.github/workflows/terraform-v3-despliegue.yml)); se destruye con [`terraform-v3-destruir.yml`](.github/workflows/terraform-v3-destruir.yml).
 
 ### 📊 Observabilidad
 
