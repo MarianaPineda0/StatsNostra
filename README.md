@@ -78,9 +78,8 @@ flowchart LR
 - **Destruir:** Actions → `Destrucción v3 con Terraform` → escribir `DESTRUIR`.
 - **Guía completa** (estado remoto, comandos manuales, outputs): [`terraform/README.md`](terraform/README.md).
 
-**Alcance de la v3:** esta entrega pide infraestructura como código, no
-observabilidad ni integración con las APIs de los compañeros. Por eso el
-despliegue de Terraform solo crea el mínimo (con Redis) y no configura
+**Alcance de la v3:** el foco es la infraestructura como código. Por eso el
+despliegue de Terraform solo crea lo esencial (con Redis) y no configura
 Grafana Cloud ni las URLs de trading-journal y ecommerce. El código de la API
 (`v2`, caché, OpenTelemetry) sigue en el repositorio y queda inactivo cuando
 esas variables no están definidas. El pipeline de la v2 (`despliegue-gke.yml`)
@@ -125,7 +124,7 @@ flowchart TB
 
 ### 📊 Observabilidad
 
-Dos capas, como pide la rúbrica: monitoreo nativo de la nube propia, y una
+Dos capas: monitoreo nativo de la nube propia, y una
 herramienta SAAS transversal compartida por las tres nubes del equipo.
 
 **Nativo (GCP):**
@@ -528,13 +527,12 @@ pytest --cov=app --cov-report=term-missing
 ```
 
 Los pipelines de `v1` (`pruebas.yml`/`produccion.yml`) corren estas pruebas
-en cada push, pero ya sin gate mínimo de cobertura — no es un requisito de
-esta entrega, se quitó para no bloquear despliegues por algo que no se
-evalúa.
+en cada push, pero ya sin gate mínimo de cobertura: se quitó para no
+bloquear los despliegues.
 
 46 pruebas automatizadas, corriendo contra PostgreSQL real (no mocks),
 cubriendo la lógica de `v1` (el código nuevo de `v2` no tiene pruebas
-propias — no es un requisito de esta entrega). Detalle completo en
+propias). Detalle completo en
 [`docs/pruebas.md`](docs/pruebas.md).
 
 ## 🚀 CI/CD
