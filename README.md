@@ -243,6 +243,10 @@ Consultas de ejemplo:
 
 Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue o con `terraform output ip_api`).
 
+> ℹ️ Esta demostración es la de la v2. En el despliegue v3 no se configuran las
+> APIs de los compañeros ni Grafana Cloud: `Trade` y `Comercio` salen en `null`
+> y los pasos 1 (paneles) y 4 no aplican. Los pasos 2 y 3 funcionan igual.
+
 1. **Flujo entre nubes y trace-id.**
    `curl -H "X-Trace-Id: demo-001" http://<IP_API>/api/v2/apostadores/7`
    devuelve el apostador más un `Trade` (OCI) y un `Comercio` (AWS) reales. En
