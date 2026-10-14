@@ -1,0 +1,36 @@
+name: Destrucción v3 con Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe DESTRUIR para borrar toda la infraestructura v3'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  BUCKET_ESTADO: statsnostra-v3-estado-3f57bb8c
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+
+jobs:
+  destruir:
+    name: Destruir la infraestructura v3
+    runs-on: ubuntu-latest
+    steps:
+      # Evita que un clic accidental borre todo
+      - name: Verificar la confirmación
+        run: |
+          if [ "${{ inputs.confirmacion }}" != "DESTRUIR" ]; then
+            echo "Confirmación incorrecta: hay que escribir DESTRUIR"
+            exit 1
+          fi
+
+      - name: Checkout del código
+        uses: actions/checkout@v4
