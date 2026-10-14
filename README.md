@@ -59,7 +59,7 @@ la define en código y un pipeline la despliega e instala el API encima.
 
 ```mermaid
 flowchart LR
-    Dev[👩‍💻 Push a develop] --> GH[⚙️ GitHub Actions]
+    Dev[▶️ Run workflow] --> GH[⚙️ GitHub Actions]
     GH -->|terraform apply| GCP[☁️ Google Cloud]
     GH -->|build + kubectl| GKE[☸️ API v3 en GKE]
     GCP --- GKE
