@@ -78,3 +78,7 @@ jobs:
           done
           echo "El balanceador no se liberó a tiempo"
           exit 1
+
+      - name: Terraform destroy
+        working-directory: terraform
+        run: terraform destroy -input=false -auto-approve
