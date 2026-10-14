@@ -26,8 +26,10 @@ jobs:
     steps:
       # Evita que un clic accidental borre todo
       - name: Verificar la confirmación
+        env:
+          CONFIRMACION: ${{ inputs.confirmacion }}
         run: |
-          if [ "${{ inputs.confirmacion }}" != "DESTRUIR" ]; then
+          if [ "$CONFIRMACION" != "DESTRUIR" ]; then
             echo "Confirmación incorrecta: hay que escribir DESTRUIR"
             exit 1
           fi
