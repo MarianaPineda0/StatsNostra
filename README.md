@@ -52,6 +52,40 @@ su predicción una vez el partido finaliza.
 | 🚨 | **Grafana Cloud** — Alertas | [Reglas de alerta](https://sturdyanchovy2072.grafana.net/alerting/list) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
 
+## 🏗️ Infraestructura como código (v3)
+
+En la v3 la infraestructura de Google Cloud deja de crearse a mano: **Terraform**
+la define en código y un pipeline la despliega e instala el API encima.
+
+```mermaid
+flowchart LR
+    Dev[👩‍💻 Push a develop] --> GH[⚙️ GitHub Actions]
+    GH -->|terraform apply| GCP[☁️ Google Cloud]
+    GH -->|build + kubectl| GKE[☸️ API v3 en GKE]
+    GCP --- GKE
+```
+
+| Servicio de GCP | Archivo | Rol en la solución |
+|---|---|---|
+| ☸️ GKE | `gke.tf` | Ejecuta el API |
+| 🐘 Cloud SQL (PostgreSQL 16) | `cloudsql.tf` | Base de datos `statsnostra_v3` |
+| ⚡ Memorystore (Redis) | `redis.tf` | Caché de las respuestas |
+| 📦 Artifact Registry | `artifact_registry.tf` | Imágenes Docker |
+| 📍 IP externa estática | `ip.tf` | Dirección fija del API |
+| 🔐 Secret Manager | `secretos.tf` | Contraseña de la base de datos |
+
+- **Desplegar:** Actions → `Despliegue v3 con Terraform` → *Run workflow*.
+- **Destruir:** Actions → `Destrucción v3 con Terraform` → escribir `DESTRUIR`.
+- **Guía completa** (estado remoto, comandos manuales, outputs): [`terraform/README.md`](terraform/README.md).
+
+**Alcance de la v3:** esta entrega pide infraestructura como código, no
+observabilidad ni integración con las APIs de los compañeros. Por eso el
+despliegue de Terraform solo crea el mínimo (con Redis) y no configura
+Grafana Cloud ni las URLs de trading-journal y ecommerce. El código de la API
+(`v2`, caché, OpenTelemetry) sigue en el repositorio y queda inactivo cuando
+esas variables no están definidas. El pipeline de la v2 (`despliegue-gke.yml`)
+se retiró porque lo reemplazan los workflows de Terraform.
+
 ## ☸️ Arquitectura multicloud
 
 | API | Integrante que la opera | Nube | Componente transversal |
