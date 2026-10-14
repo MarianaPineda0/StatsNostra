@@ -124,3 +124,42 @@ gcloud compute addresses list
 ```
 
 Las cuatro listas deben salir vacías.
+
+## 🤖 Hacerlo todo desde GitHub Actions
+
+No hace falta correr nada en tu computador: dos workflows manuales hacen el
+trabajo. Se lanzan desde la pestaña **Actions** del repositorio con el botón
+**Run workflow**.
+
+### 🚀 `Despliegue v3 con Terraform`
+
+```mermaid
+flowchart LR
+    A[🔑 Login en GCP<br/>sin llaves] --> B[✅ fmt + validate]
+    B --> C[👀 plan]
+    C --> D[🏗️ apply]
+    D --> E[📦 Build de la imagen]
+    E --> F[☸️ Manifiestos en GKE]
+    F --> G[🐘 Migraciones]
+    G --> H[🩺 Prueba de humo]
+```
+
+| Job | Qué hace |
+|---|---|
+| 🏗️ `infraestructura` | Ejecuta Terraform completo y entrega los outputs al siguiente job |
+| 🚀 `aplicacion` | Construye la imagen con Buildpacks, crea el Secret con la contraseña de Secret Manager, aplica `k8s/`, corre las migraciones por el Cloud SQL Proxy y comprueba que `/health` responda |
+
+Al final, el resumen de la ejecución muestra la URL del API y de Swagger.
+
+### 💥 `Destrucción v3 con Terraform`
+
+Pide escribir **`DESTRUIR`** como confirmación, para que nadie lo lance por
+accidente. Después:
+
+1. ⚖️ Borra el Service de Kubernetes y espera a que GCP libere el balanceador.
+2. 💥 Ejecuta `terraform destroy`.
+3. 🔎 Revisa que no quede ningún clúster, base de datos, Redis, IP, secreto ni
+   repositorio. Si queda algo, el workflow falla y lo lista.
+
+> 🔑 **Autenticación:** los dos workflows entran a GCP con Workload Identity
+> Federation, así que no hay llaves JSON guardadas en GitHub.
