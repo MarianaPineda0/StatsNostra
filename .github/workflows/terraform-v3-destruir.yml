@@ -58,3 +58,23 @@ jobs:
       - name: Terraform init
         working-directory: terraform
         run: terraform init -backend-config="bucket=${{ env.BUCKET_ESTADO }}"
+
+      # El Service crea un balanceador fuera de Terraform; si sigue vivo, la IP no se libera
+      - name: Borrar el Service de Kubernetes
+        run: |
+          if gcloud container clusters get-credentials statsnostra-v3-gke --zone=${{ env.REGION }}-a; then
+            kubectl delete service statsnostra-api-service --ignore-not-found --wait
+          else
+            echo "El clúster no existe, no hay balanceador que borrar"
+          fi
+
+      - name: Esperar a que GCP libere el balanceador
+        run: |
+          for intento in $(seq 1 30); do
+            REGLAS=$(gcloud compute forwarding-rules list --format="value(name)")
+            [ -z "$REGLAS" ] && exit 0
+            echo "Reglas de reenvío activas: $REGLAS"
+            sleep 10
+          done
+          echo "El balanceador no se liberó a tiempo"
+          exit 1
