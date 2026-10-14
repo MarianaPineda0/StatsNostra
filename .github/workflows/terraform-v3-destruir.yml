@@ -82,3 +82,19 @@ jobs:
       - name: Terraform destroy
         working-directory: terraform
         run: terraform destroy -input=false -auto-approve
+
+      # Confirma que no queda nada que siga cobrando
+      - name: Revisar que no queden recursos
+        run: |
+          RESTOS=""
+          RESTOS="$RESTOS$(gcloud container clusters list --format='value(name)')"
+          RESTOS="$RESTOS$(gcloud sql instances list --format='value(name)')"
+          RESTOS="$RESTOS$(gcloud redis instances list --region=${{ env.REGION }} --format='value(name)')"
+          RESTOS="$RESTOS$(gcloud compute addresses list --format='value(name)')"
+          RESTOS="$RESTOS$(gcloud secrets list --format='value(name)')"
+          RESTOS="$RESTOS$(gcloud artifacts repositories list --location=${{ env.REGION }} --format='value(name)')"
+          if [ -n "$RESTOS" ]; then
+            echo "Quedaron recursos: $RESTOS"
+            exit 1
+          fi
+          echo "Proyecto limpio: no queda ningún recurso de la v3"
