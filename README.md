@@ -42,7 +42,8 @@ su predicción una vez el partido finaliza.
 
 | | Ambiente | URL |
 |---|---|---|
-| ☸️ | **GKE** — API (v1 + v2) | [34.57.56.128](http://34.57.56.128) |
+| ☸️ | **GKE (v3)** — API (v1 + v2) | La IP la entrega el workflow `Despliegue v3 con Terraform` en su resumen; la infraestructura se destruye al terminar la sustentación |
+| 🏗️ | **Infraestructura v3** — Terraform | [`terraform/`](terraform/) |
 | 🟢 | **Pruebas** — API (Render, solo v1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
 | 🔵 | **Producción** — API (Render, solo v1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
