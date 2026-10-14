@@ -268,19 +268,18 @@ Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue 
    (`sum(increase(http_server_duration_milliseconds_count{service_name="api-gcp", http_status_code=~"5.."}[5m]))`).
    La alerta nativa de Cloud Monitoring se dispara con 5xx reales.
 
-### Servicios de GCP usados
+### Servicios de GCP usados (v3)
 
-| Servicio | Para qué |
-|---|---|
-| **Google Kubernetes Engine (GKE)** | Clúster (2 nodos), despliegue de la API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
-| **Compute Engine** | VMs que forman los nodos del clúster GKE |
-| **Cloud SQL (PostgreSQL)** | Base de datos, conectada desde el clúster vía sidecar (Cloud SQL Auth Proxy) |
-| **Memorystore (Redis)** | Caché Distribuida de las respuestas de trading-journal y ecommerce |
-| **Artifact Registry** | Almacena la imagen de la API construida con Buildpacks |
-| **Cloud Build** | Construcción de imágenes con Buildpacks en pruebas manuales |
-| **Cloud Logging** | Logs en JSON con `trace_id`, consultables por petición |
-| **Cloud Monitoring** | Métricas nativas, y la alerta de 5xx a correo |
-| **IAM + Workload Identity Federation** | Autenticación del pipeline de GitHub Actions sin llaves de servicio |
+| Servicio | Creado con | Para qué |
+|---|---|---|
+| **Google Kubernetes Engine (GKE)** | `gke.tf` | Clúster zonal de 2 nodos `e2-medium`; corre el API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
+| **Cloud SQL (PostgreSQL 16)** | `cloudsql.tf` | Base de datos `statsnostra_v3`, a la que el API llega por el Cloud SQL Auth Proxy |
+| **Memorystore (Redis 7)** | `redis.tf` | Caché del API, en la misma red que el clúster |
+| **Artifact Registry** | `artifact_registry.tf` | Almacena la imagen del API construida con Buildpacks |
+| **Secret Manager** | `secretos.tf` | Guarda la contraseña de la base de datos; el pipeline la lee para crear el `Secret` de Kubernetes |
+| **IP externa estática** | `ip.tf` | Dirección fija del `LoadBalancer` |
+| **Cloud Storage** | a mano (una vez) | Bucket con el estado remoto de Terraform, versionado y sin acceso público |
+| **IAM + Workload Identity Federation** | a mano (una vez) | Los workflows de GitHub Actions se autentican sin llaves de servicio |
 
 > ⏱️ Los servicios gratuitos de Render "duermen" tras 15 min de
 > inactividad — la primera petición puede tardar ~50 s en responder
@@ -541,19 +540,23 @@ propias). Detalle completo en
 
 ## 🚀 CI/CD
 
-Tres pipelines en GitHub Actions:
+Cuatro pipelines en GitHub Actions:
 
-| Pipeline | Rama | Qué hace |
+| Pipeline | Cuándo corre | Qué hace |
 |---|---|---|
-| ⚙️ `pruebas.yml` | `develop` | Pruebas + lint → despliegue a Render |
-| ⚙️ `produccion.yml` | `main` | Pruebas + lint → despliegue a Render |
-| ☸️ `despliegue-gke.yml` | `develop` | Build con Buildpacks → Artifact Registry → despliegue automático a GKE |
+| ⚙️ `pruebas.yml` | push a `develop` | Pruebas + lint → despliegue a Render |
+| ⚙️ `produccion.yml` | push a `main` | Pruebas + lint → despliegue a Render |
+| 🏗️ `terraform-v3-despliegue.yml` | manual | `terraform apply` → build con Buildpacks → Artifact Registry → manifiestos en GKE → migraciones → prueba de humo |
+| 💥 `terraform-v3-destruir.yml` | manual, pide escribir `DESTRUIR` | Borra el `Service` de k8s, `terraform destroy` y revisa que no queden recursos |
 
-`despliegue-gke.yml` se autentica sin llaves (Workload Identity Federation)
-y construye la imagen sin Cloud Build ni Docker: usa `pack` directo en el
-runner, publica en Artifact Registry, y actualiza el `Deployment` en el
-clúster (`kubectl set image` + `rollout status`). Ver [`docs/ci-cd.md`](docs/ci-cd.md)
-para el detalle de los pipelines de Render.
+Los dos pipelines de Terraform se autentican sin llaves (Workload Identity
+Federation). El de despliegue construye la imagen con `pack` directo en el
+runner, lee la contraseña de la base desde Secret Manager, reemplaza las
+variables de `k8s/` con `envsubst` (IP, host de Redis, imagen y conexión de
+Cloud SQL) y corre las migraciones de Alembic a través del Cloud SQL Proxy.
+Son manuales porque cada ejecución crea GKE, Cloud SQL y Redis, que consumen
+crédito. Ver [`terraform/README.md`](terraform/README.md) y, para los
+pipelines de Render, [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ## ☁️ Ambientes (Render)
 
@@ -570,6 +573,7 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 
 ## 📚 Documentación adicional
 
+- 🌍 [`terraform/README.md`](terraform/README.md)
 - 🏗️ [`docs/arquitectura.md`](docs/arquitectura.md)
 - 🐳 [`docs/docker.md`](docs/docker.md)
 - 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)
