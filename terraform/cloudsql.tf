@@ -34,7 +34,7 @@ resource "google_sql_user" "api" {
   instance = google_sql_database_instance.api.name
 
   password_wo         = ephemeral.random_password.db.result
-  password_wo_version = 1
+  password_wo_version = 2
 }
 
 resource "google_sql_database" "api" {
