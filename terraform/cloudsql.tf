@@ -12,6 +12,8 @@ resource "google_sql_database_instance" "api" {
   deletion_protection = false
 
   settings {
+    # GCP crea ENTERPRISE_PLUS por defecto y ahí no existe el tier db-f1-micro
+    edition           = "ENTERPRISE"
     tier              = "db-f1-micro"
     disk_size         = 10
     disk_type         = "PD_HDD"
