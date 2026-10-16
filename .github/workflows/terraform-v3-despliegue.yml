@@ -127,6 +127,8 @@ jobs:
           for archivo in configmap deployment service hpa; do
             envsubst '${LB_IP} ${REDIS_HOST} ${CLOUDSQL_CONNECTION_NAME} ${IMAGE}' < k8s/$archivo.yaml | kubectl apply -f -
           done
+          # Los pods leen el Secret al arrancar: se reinician para tomar la contraseña vigente
+          kubectl rollout restart deployment/statsnostra-api
           kubectl rollout status deployment/statsnostra-api --timeout=300s
 
       - name: Configurar Python
