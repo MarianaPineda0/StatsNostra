@@ -68,6 +68,15 @@ gcloud storage buckets update gs://statsnostra-v3-estado-3f57bb8c --versioning
 
 El versionado permite recuperar un estado anterior si algo sale mal.
 
+Terraform también necesita dos APIs activas desde antes: con ellas lee y
+administra el resto de las APIs del proyecto, así que no puede activarlas por
+sí mismo. Si faltan, el `plan` falla con un error 403 de *Cloud Resource
+Manager*.
+
+```bash
+gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com --project=project-3f57bb8c-371e-4b9c-949
+```
+
 ## 🚀 Paso 2 · Crear la infraestructura
 
 Desde esta carpeta (`terraform/`) son tres comandos:
