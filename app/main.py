@@ -15,7 +15,7 @@ from app.api.routes import (
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.core.logging_config import configurar_logging
-from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
+from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware, VersionMiddleware
 from app.core.tracing import configurar_tracing
 
 settings = get_settings()
@@ -34,6 +34,9 @@ app.add_middleware(MetodoOverrideMiddleware)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
 # quedar fijado antes que cualquier otro middleware o ruta se ejecute.
 app.add_middleware(TraceIdMiddleware)
+# Va por fuera de todo para que ni un error del propio middleware de arriba
+# deje una respuesta sin version ni track
+app.add_middleware(VersionMiddleware, version=settings.app_version, track=settings.track)
 
 app.include_router(apostadores.router)
 app.include_router(partidos.router)
@@ -78,4 +81,4 @@ def manejar_regla_negocio(request: Request, exc: ReglaDeNegocioViolada) -> JSONR
 
 @app.get("/health", tags=["health"])
 def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.app_version, "track": settings.track}
