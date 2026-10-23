@@ -5,6 +5,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import (
     apostadores,
     apostadores_v2,
+    apostadores_v4,
     cache,
     consultas,
     partidos,
@@ -59,6 +60,7 @@ app.include_router(cache.router)
 
 # Solo existe en la imagen canary: la estable (v3.0.0) no tiene /api/v4
 app.include_router(predicciones_v4.router)
+app.include_router(apostadores_v4.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.
