@@ -11,6 +11,7 @@ from app.api.routes import (
     partidos_v2,
     predicciones,
     predicciones_v2,
+    predicciones_v4,
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
@@ -55,6 +56,9 @@ app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
 app.include_router(cache.router)
+
+# Solo existe en la imagen canary: la estable (v3.0.0) no tiene /api/v4
+app.include_router(predicciones_v4.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.
