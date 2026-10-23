@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,7 +13,10 @@ class Settings(BaseSettings):
     """
 
     app_name: str = "StatsNostra"
+    # En el despliegue canary se sobreescribe con APP_VERSION (la version
+    # del tag que se construyo) y TRACK, para saber que revision responde
     app_version: str = "0.1.0"
+    track: Literal["stable", "canary"] = "stable"
 
     # Identifica el ambiente activo para logs y comportamiento condicional
     entorno: str = "desarrollo"
