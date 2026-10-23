@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    SmallInteger,
     UniqueConstraint,
     func,
 )
@@ -31,6 +32,10 @@ class Prediccion(Base):
         CheckConstraint(
             "goles_visitante_pred >= 0", name="ck_prediccion_goles_visitante_no_negativo"
         ),
+        CheckConstraint(
+            "confianza IS NULL OR (confianza >= 1 AND confianza <= 5)",
+            name="ck_prediccion_confianza_rango",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -45,6 +50,9 @@ class Prediccion(Base):
     # los calcula (ver app/services/puntos.py) y los deja fijos para siempre
     acertada: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     puntos: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Solo la API /api/v4 la llena (1 a 5). Admite NULL a proposito: es la
+    # fase Expand, y la version estable no sabe que existe
+    confianza: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     apostador: Mapped["Apostador"] = relationship(back_populates="predicciones")
     partido: Mapped["Partido"] = relationship(back_populates="predicciones")
