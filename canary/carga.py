@@ -70,42 +70,42 @@ def _una_peticion(url: str, cabeceras: dict) -> tuple[str, str, int, float]:
     )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--url", required=True, help="URL base del servicio")
-    parser.add_argument("--duracion", type=int, default=60, help="segundos de carga")
-    parser.add_argument("--hilos", type=int, default=10, help="peticiones en paralelo")
-    parser.add_argument("--fault", default="", help='valor de X-Fault, ej. "error=0.5"')
-    parser.add_argument("--cabecera", action="append", default=[], help='ej. "x-canary: true"')
-    args = parser.parse_args()
-
+def cabeceras_de(fault: str = "", extra: list[str] | None = None) -> dict:
     cabeceras = {"Accept": "application/json"}
-    if args.fault:
-        cabeceras["X-Fault"] = args.fault
-    for texto in args.cabecera:
+    if fault:
+        cabeceras["X-Fault"] = fault
+    for texto in extra or []:
         nombre, _, valor = texto.partition(":")
         cabeceras[nombre.strip()] = valor.strip()
+    return cabeceras
 
+
+def generar(url: str, duracion: int, hilos: int, cabeceras: dict) -> dict[str, list]:
+    """Manda carga durante `duracion` segundos. Devuelve, por cada track que
+    respondio, la lista de (codigo, milisegundos)."""
     resultados: dict[str, list] = defaultdict(list)
     cerrojo = threading.Lock()
-    fin = time.monotonic() + args.duracion
+    fin = time.monotonic() + duracion
 
     def trabajar() -> None:
         while time.monotonic() < fin:
             track, version, codigo, ms = _una_peticion(
-                args.url.rstrip("/") + random.choice(RUTAS), cabeceras
+                url.rstrip("/") + random.choice(RUTAS), cabeceras
             )
             with cerrojo:
                 resultados[f"{track} {version}"].append((codigo, ms))
 
-    hilos = [threading.Thread(target=trabajar) for _ in range(args.hilos)]
-    for hilo in hilos:
-        hilo.start()
-    for hilo in hilos:
-        hilo.join()
+    ejecutores = [threading.Thread(target=trabajar) for _ in range(hilos)]
+    for ejecutor in ejecutores:
+        ejecutor.start()
+    for ejecutor in ejecutores:
+        ejecutor.join()
+    return resultados
 
+
+def imprimir(resultados: dict[str, list], duracion: int, hilos: int) -> None:
     total = sum(len(v) for v in resultados.values())
-    print(f"\n{total} peticiones en {args.duracion} s con {args.hilos} hilos\n")
+    print(f"\n{total} peticiones en {duracion} s con {hilos} hilos\n")
     print(
         f"{'respondio':<18} {'peticiones':>10} {'reparto':>8} {'5xx':>5} {'err cota95':>10} "
         f"{'p50ms':>7} {'p95ms':>7} {'p99ms':>7}"
@@ -118,6 +118,21 @@ def main() -> None:
             f"{_cota_superior(errores, len(filas)):>10.1%} {_percentil(tiempos, 0.50):>7.0f} "
             f"{_percentil(tiempos, 0.95):>7.0f} {_percentil(tiempos, 0.99):>7.0f}"
         )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--url", required=True, help="URL base del servicio")
+    parser.add_argument("--duracion", type=int, default=60, help="segundos de carga")
+    parser.add_argument("--hilos", type=int, default=10, help="peticiones en paralelo")
+    parser.add_argument("--fault", default="", help='valor de X-Fault, ej. "error=0.5"')
+    parser.add_argument("--cabecera", action="append", default=[], help='ej. "x-canary: true"')
+    args = parser.parse_args()
+
+    resultados = generar(
+        args.url, args.duracion, args.hilos, cabeceras_de(args.fault, args.cabecera)
+    )
+    imprimir(resultados, args.duracion, args.hilos)
 
 
 if __name__ == "__main__":
