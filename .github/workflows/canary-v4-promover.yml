@@ -1,0 +1,101 @@
+name: Canary v4 · Promover por etapas
+
+# Manual: sube el trafico del canary por etapas, mide en cada una y aborta
+# solo si la puerta de calidad lo pide. Los umbrales viven en canary/slo.yaml.
+on:
+  workflow_dispatch:
+    inputs:
+      escenario:
+        description: "Que simular durante la carga"
+        type: choice
+        default: "exito"
+        options:
+          - exito
+          - falla-errores
+          - falla-latencia
+      etapas:
+        description: "Porcentajes de trafico al canary, separados por coma"
+        default: "10,50,100"
+        required: true
+      bake:
+        description: "Minutos de horneado (bake time) por etapa"
+        default: "3"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  SERVICIO: statsnostra-api
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+jobs:
+  promover:
+    name: Etapas con puerta de calidad
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias del script
+        run: pip install pyyaml
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # El canary es la revision con la etiqueta "canary"; la linea base, la que
+      # hoy atiende el 100 %. Si el canary ya tiene todo el trafico no hay nada
+      # que promover.
+      - name: Identificar las revisiones
+        id: revisiones
+        run: |
+          DATOS=$(gcloud run services describe $SERVICIO --region=$REGION --format=json)
+          CANARY=$(echo "$DATOS" | jq -r '.status.traffic[] | select(.tag=="canary") | .revisionName')
+          ESTABLE=$(echo "$DATOS" | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
+          if [ -z "$CANARY" ] || [ "$CANARY" = "$ESTABLE" ]; then
+            echo "No hay un canary pendiente: despliega uno con el workflow de despliegue"
+            exit 1
+          fi
+          echo "canary=$CANARY" >> "$GITHUB_OUTPUT"
+          echo "estable=$ESTABLE" >> "$GITHUB_OUTPUT"
+          echo "url=$(echo "$DATOS" | jq -r '.status.url')" >> "$GITHUB_OUTPUT"
+
+      # Para simular una regresion se manda la cabecera X-Fault: solo el canary
+      # la obedece, la estable no tiene ese codigo
+      - name: Promover
+        env:
+          ESCENARIO: ${{ inputs.escenario }}
+        run: |
+          case "$ESCENARIO" in
+            falla-errores)  FALLO="error=0.5" ;;
+            falla-latencia) FALLO="latency=3000" ;;
+            *)              FALLO="" ;;
+          esac
+          python -m canary.promover \
+            --url "${{ steps.revisiones.outputs.url }}" \
+            --canary "${{ steps.revisiones.outputs.canary }}" \
+            --estable "${{ steps.revisiones.outputs.estable }}" \
+            --etapas "${{ inputs.etapas }}" --bake "${{ inputs.bake }}" \
+            --fault "$FALLO"
+
+      - name: Reparto final de tráfico
+        if: always()
+        run: |
+          {
+            echo "### Reparto final de tráfico"
+            gcloud run services describe $SERVICIO --region=$REGION --format=json \
+              | jq -r '.status.traffic[] | "- \(.percent // 0) % \(.revisionName) (\(.tag // "sin etiqueta"))"'
+          } >> "$GITHUB_STEP_SUMMARY"
