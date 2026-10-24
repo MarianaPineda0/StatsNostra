@@ -86,3 +86,62 @@ def test_v1_y_v2_siguen_igual_y_no_exponen_la_confianza(client):
     v1 = client.get(f"/api/v1/predicciones/{creada['id']}")
     assert v1.status_code == 200
     assert "confianza" not in v1.json()
+
+
+def _partido_numero(client, numero):
+    return client.post(
+        "/partidos",
+        json={
+            "deporte": "Futbol",
+            "liga": "Liga X",
+            "equipo_local": f"Local {numero}",
+            "equipo_visitante": f"Visitante {numero}",
+            "fecha_hora": "2026-09-01T20:00:00Z",
+        },
+    ).json()
+
+
+def test_resumen_calcula_precision_racha_y_confianza(client):
+    apostador = _crear_apostador(client, username="resumen_v4", email="resumen_v4@example.com")
+    # Siempre predice 2-1; los resultados reales son 2-1 (exacto, 3 puntos),
+    # 0-1 (falla el ganador, 0) y 3-0 (acierta el ganador, 1 punto)
+    resultados = [(2, 1, 5), (0, 1, 3), (3, 0, 4), (9, 9, None)]
+    for numero, (real_local, real_visitante, confianza) in enumerate(resultados, start=1):
+        partido = _partido_numero(client, numero)
+        cuerpo = {
+            "apostador_id": apostador["id"],
+            "partido_id": partido["id"],
+            "goles_local_pred": 2,
+            "goles_visitante_pred": 1,
+        }
+        if confianza:
+            cuerpo["confianza"] = confianza
+        assert client.post("/api/v4/predicciones", json=cuerpo).status_code == 201
+        if numero < 4:  # el cuarto partido queda pendiente
+            client.post(
+                f"/partidos/{partido['id']}/finalizar",
+                json={"resultado_local": real_local, "resultado_visitante": real_visitante},
+            )
+
+    resumen = client.get(f"/api/v4/apostadores/{apostador['id']}/resumen").json()
+    assert resumen["total_predicciones"] == 4
+    assert resumen["evaluadas"] == 3
+    assert resumen["aciertos"] == 2
+    assert resumen["precision"] == 66.67
+    assert resumen["puntos_totales"] == 4
+    # Orden de evaluacion: acierto, fallo, acierto -> la racha es solo la ultima
+    assert resumen["racha_actual"] == 1
+    assert resumen["confianza_promedio"] == 4.0
+
+
+def test_resumen_de_apostador_sin_predicciones(client):
+    apostador = _crear_apostador(client, username="vacio_v4", email="vacio_v4@example.com")
+    resumen = client.get(f"/api/v4/apostadores/{apostador['id']}/resumen").json()
+    assert resumen["total_predicciones"] == 0
+    assert resumen["precision"] == 0.0
+    assert resumen["racha_actual"] == 0
+    assert resumen["confianza_promedio"] is None
+
+
+def test_resumen_de_apostador_inexistente(client):
+    assert client.get("/api/v4/apostadores/999999/resumen").status_code == 404
