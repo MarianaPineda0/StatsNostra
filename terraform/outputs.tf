@@ -1,8 +1,3 @@
-output "cluster" {
-  description = "Nombre del clúster GKE"
-  value       = google_container_cluster.api.name
-}
-
 output "cloudsql_conexion" {
   description = "Nombre de conexión de Cloud SQL para el proxy"
   value       = google_sql_database_instance.api.connection_name
