@@ -38,6 +38,6 @@ resource "google_sql_user" "api" {
 }
 
 resource "google_sql_database" "api" {
-  name     = "statsnostra_v3"
+  name     = "statsnostra_v4"
   instance = google_sql_database_instance.api.name
 }
