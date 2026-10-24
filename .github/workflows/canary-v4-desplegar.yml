@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       imagen_estable: ${{ steps.estable.outputs.imagen }}
+      sha_estable: ${{ steps.estable.outputs.sha }}
       imagen_canary: ${{ steps.canary.outputs.imagen }}
       sha_canary: ${{ steps.canary.outputs.sha }}
     steps:
@@ -67,6 +68,7 @@ jobs:
           SHA=$(git -C estable-src rev-parse --short HEAD)
           docker build -t "$REPOSITORIO:estable-$SHA" estable-src
           docker push "$REPOSITORIO:estable-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:estable-$SHA")" >> "$GITHUB_OUTPUT"
 
       - name: Imagen canary
@@ -119,3 +121,48 @@ jobs:
             --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
             --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
           gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+
+      # Si el servicio ya existe, la linea base es la revision que hoy atiende
+      # el 100 %; si no, se crea la estable con la imagen de ref_estable
+      - name: Revisión estable (línea base)
+        id: estable
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
+          SHA: ${{ needs.imagenes.outputs.sha_estable }}
+          REF: ${{ inputs.ref_estable }}
+        run: |
+          if gcloud run services describe $SERVICIO --region=$REGION >/dev/null 2>&1; then
+            BASE=$(gcloud run services describe $SERVICIO --region=$REGION --format=json \
+              | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
+          else
+            gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
+              --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
+              --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+              --set-env-vars="APP_VERSION=${REF#v},TRACK=stable" --port=8000 \
+              --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+              --revision-suffix="estable-$SHA"
+            BASE="$SERVICIO-estable-$SHA"
+          fi
+          gcloud run services update-traffic $SERVICIO --region=$REGION --update-tags="estable=$BASE"
+          echo "revision=$BASE" >> "$GITHUB_OUTPUT"
+
+      # --no-traffic: la revision queda desplegada pero el publico no la ve.
+      # Solo se llega a ella por su URL de revision (etapa 0).
+      - name: Revisión canary sin tráfico
+        id: canary
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_canary }}
+          SHA: ${{ needs.imagenes.outputs.sha_canary }}
+          REF: ${{ inputs.ref_canary }}
+        run: |
+          # Un tag de version (v4.0.0) da 4.0.0; una rama da una version de prueba
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then VERSION="${REF#v}"; else VERSION="4.0.0-rc.$SHA"; fi
+          REVISION="canary-$SHA-$GITHUB_RUN_NUMBER"
+          gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --set-env-vars="APP_VERSION=$VERSION,TRACK=canary,FAULT_INJECTION=true" --port=8000 \
+            --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+            --revision-suffix="$REVISION" --tag=canary --no-traffic
+          echo "revision=$SERVICIO-$REVISION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
