@@ -13,8 +13,10 @@ locals {
     {
       titulo = "Errores 5xx (fracción de las peticiones)"
       tipo   = "LINE"
+      # El "or ... * 0" mantiene en 0 % a la revision que no tuvo errores; sin
+      # el, Prometheus omite la serie y su linea desaparece del grafico
       consulta = join(" / ", [
-        "sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio},response_code_class=\"5xx\"}[1m]))",
+        "(sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio},response_code_class=\"5xx\"}[1m])) or sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio}}[1m])) * 0)",
         "sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio}}[1m]))",
       ])
     },
