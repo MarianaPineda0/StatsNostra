@@ -1,0 +1,79 @@
+name: Canary v4 · Desplegar al 0 %
+
+# Manual: construye las imagenes, migra la base y deja la revision canary
+# desplegada sin trafico publico (etapa 0). La promocion es otro workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      ref_estable:
+        description: "Tag o rama de la version estable (solo se usa si el servicio aun no existe)"
+        default: "v3.0.0"
+        required: true
+      ref_canary:
+        description: "Tag o rama de la version canary"
+        default: "main"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  SERVICIO: statsnostra-api
+  REPOSITORIO: us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-v4-repo/statsnostra-api
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+jobs:
+  imagenes:
+    name: Construir imágenes por digest
+    runs-on: ubuntu-latest
+    outputs:
+      imagen_estable: ${{ steps.estable.outputs.imagen }}
+      imagen_canary: ${{ steps.canary.outputs.imagen }}
+      sha_canary: ${{ steps.canary.outputs.sha }}
+    steps:
+      - name: Código de la estable
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_estable }}
+          path: estable-src
+
+      - name: Código del canary
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_canary }}
+          path: canary-src
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Autenticar Docker con Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Se despliega por digest (sha256), no por etiqueta: una etiqueta se puede
+      # mover y el digest siempre apunta a exactamente la misma imagen
+      - name: Imagen estable
+        id: estable
+        run: |
+          SHA=$(git -C estable-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORIO:estable-$SHA" estable-src
+          docker push "$REPOSITORIO:estable-$SHA"
+          echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:estable-$SHA")" >> "$GITHUB_OUTPUT"
+
+      - name: Imagen canary
+        id: canary
+        run: |
+          SHA=$(git -C canary-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORIO:canary-$SHA" canary-src
+          docker push "$REPOSITORIO:canary-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:canary-$SHA")" >> "$GITHUB_OUTPUT"
