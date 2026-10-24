@@ -16,6 +16,7 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
+from app.core.fallos import InyeccionFallosMiddleware
 from app.core.logging_config import configurar_logging
 from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware, VersionMiddleware
 from app.core.tracing import configurar_tracing
@@ -31,6 +32,11 @@ configurar_tracing(
     settings.grafana_otlp_token,
     settings.otel_service_name,
 )
+
+# El primero que se agrega queda mas adentro: asi hasta un 500 inyectado
+# sale con trace-id, version y track como cualquier otra respuesta
+if settings.fault_injection:
+    app.add_middleware(InyeccionFallosMiddleware)
 
 app.add_middleware(MetodoOverrideMiddleware)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
