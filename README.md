@@ -52,38 +52,143 @@ su predicción una vez el partido finaliza.
 | 🚨 | **Grafana Cloud** — Alertas | [Reglas de alerta](https://sturdyanchovy2072.grafana.net/alerting/list) |
 | 🐙 | **Repositorio** | [github.com/MarianaPineda0/StatsNostra](https://github.com/MarianaPineda0/StatsNostra) |
 
-## 🏗️ Infraestructura como código (v3)
+## 🐤 Canary Deployment (v4)
 
-En la v3 la infraestructura de Google Cloud deja de crearse a mano: **Terraform**
-la define en código y un pipeline la despliega e instala el API encima.
+La v4 llega a producción de a poco: una versión nueva (**canary**) convive con
+la estable, recibe un porcentaje pequeño del tráfico, se mide contra ella y
+solo se promueve si cumple los umbrales acordados antes de desplegar. Si no,
+el tráfico vuelve solo a la estable.
 
 ```mermaid
 flowchart LR
-    Dev[▶️ Run workflow] --> GH[⚙️ GitHub Actions]
-    GH -->|terraform apply| GCP[☁️ Google Cloud]
-    GH -->|build + kubectl| GKE[☸️ API v3 en GKE]
-    GCP --- GKE
+    U[👤 Usuarios] --> CR{{Cloud Run<br/>statsnostra-api<br/>reparto por porcentaje}}
+    P[🧪 Pruebas internas<br/>URL de revisión canary---] --> C
+    CR -->|100 % menos p| E[Revisión estable<br/>v3.0.0 · /api/v1 y /api/v2]
+    CR -->|p %| C[Revisión canary<br/>v4.0.0 · agrega /api/v4]
+    E --> SQL[(Cloud SQL<br/>PostgreSQL 16)]
+    C --> SQL
+    E -. métricas y logs .-> M[Cloud Monitoring<br/>dashboard y alertas]
+    C -. métricas y logs .-> M
+    M --> G[Puerta de calidad<br/>canary/gate.py]
+    G -->|promover o abortar| CR
 ```
 
-| Servicio de GCP | Archivo | Rol en la solución |
+| | |
+|---|---|
+| **Proveedor** | Google Cloud, con **Cloud Run** (PaaS) para las dos revisiones |
+| **Base de datos** | Cloud SQL (PostgreSQL 16), compartida por estable y canary |
+| **Imágenes** | Artifact Registry, desplegadas por **digest** (`sha256`), no por etiqueta |
+| **Secretos** | Secret Manager: la `DATABASE_URL` la lee Cloud Run, nunca pasa por una variable en claro |
+| **Observabilidad** | Cloud Monitoring (métricas por revisión, dashboard y alertas) y Cloud Logging |
+| **Enrutamiento** | División de tráfico nativa de Cloud Run: el porcentaje lo aplica la plataforma por petición, sin depender del número de instancias |
+| **Acceso al 0 %** | Cada revisión tiene una URL propia por etiqueta (`https://canary---…run.app`) que no recibe tráfico público |
+
+El reparto es por petición: no hay sesión fija entre revisiones, así que un
+mismo usuario puede ser atendido por estable y canary en peticiones seguidas.
+Esto es posible porque las dos versiones son compatibles entre sí (ver
+*Compatibilidad de datos*).
+
+### Versiones y track
+
+| Revisión | Release | Rutas | `X-Track` |
+|---|---|---|---|
+| Estable (línea base) | `v3.0.0` | `/api/v1`, `/api/v2` | `stable` |
+| Canary | `v4.0.0` | las mismas, más `/api/v4` | `canary` |
+
+Toda respuesta, incluidos los errores y los 404, lleva `X-App-Version` y
+`X-Track`, así se ve en vivo qué revisión atendió cada petición. `/health`
+los repite en el cuerpo.
+
+### Cambio funcional del canary (`/api/v4`)
+
+- **Confianza en la predicción:** `POST /api/v4/predicciones` acepta un nivel
+  de `confianza` de 1 a 5 (opcional). `GET` y `PATCH` también la manejan.
+- **Resumen del apostador:** `GET /api/v4/apostadores/{id}/resumen` devuelve
+  precisión, puntos, racha de aciertos y confianza promedio.
+- La confianza no cambia cómo se calculan los puntos, y las rutas v1 y v2 no
+  la exponen.
+
+### Compatibilidad de datos (Expand/Contract)
+
+| Fase | Qué se hace | Estado |
 |---|---|---|
-| ☸️ GKE | `gke.tf` | Ejecuta el API |
-| 🐘 Cloud SQL (PostgreSQL 16) | `cloudsql.tf` | Base de datos `statsnostra_v3` |
-| ⚡ Memorystore (Redis) | `redis.tf` | Caché de las respuestas |
-| 📦 Artifact Registry | `artifact_registry.tf` | Imágenes Docker |
-| 📍 IP externa estática | `ip.tf` | Dirección fija del API |
-| 🔐 Secret Manager | `secretos.tf` | Contraseña de la base de datos |
+| **Expand** | La migración `89b8d15bef23` agrega la columna `confianza`, que admite `NULL` | Aplicada antes de desplegar el canary |
+| **Migrar** | Las predicciones nuevas por `/api/v4` guardan la confianza; las anteriores quedan en `NULL` y el API lo tolera | En uso |
+| **Contract** | Quitar lo que ya no se use iría en otra migración, y solo cuando la estable anterior ya no exista | No se ejecuta: mientras haya rollback posible no hay migraciones destructivas |
 
-- **Desplegar:** Actions → `Despliegue v3 con Terraform` → *Run workflow*.
-- **Destruir:** Actions → `Destrucción v3 con Terraform` → escribir `DESTRUIR`.
-- **Guía completa** (estado remoto, comandos manuales, outputs): [`terraform/README.md`](terraform/README.md).
+Como la estable no conoce la columna y la ignora, **se puede abortar en
+cualquier momento sin tocar los datos**. Se comprobó ejecutando las 51
+pruebas de la `v3.0.0` contra la base ya expandida.
 
-**Alcance de la v3:** el foco es la infraestructura como código. Por eso el
-despliegue de Terraform solo crea lo esencial (con Redis) y no configura
-Grafana Cloud ni las URLs de trading-journal y ecommerce. El código de la API
-(`v2`, caché, OpenTelemetry) sigue en el repositorio y queda inactivo cuando
-esas variables no están definidas. El pipeline de la v2 (`despliegue-gke.yml`)
-se retiró porque lo reemplazan los workflows de Terraform.
+### Plan por etapas
+
+| Etapa | Tráfico al canary | Cómo se llega | Horneado | Qué decide |
+|---|---|---|---|---|
+| **0** | 0 % público | URL de revisión etiquetada del canary | prueba de humo | `/health` con `X-Track: canary`, `/api/v4` responde, el público sigue en la estable |
+| **1** | 10 % | workflow *Promover por etapas* | 3 min + 90 s de métricas | puerta de calidad |
+| **2** | 50 % | ídem | 3 min + 90 s | puerta de calidad |
+| **3** | 100 % | ídem | 3 min + 90 s | puerta de calidad |
+
+Los tiempos son parámetros del workflow (`bake`, `--espera-metricas`). Los 90 s
+extra existen porque Cloud Monitoring tarda en publicar lo que acaba de pasar.
+En cada etapa se genera carga concurrente con `canary/carga.py`, así el canary
+recibe suficientes peticiones para decidir con datos y no por azar.
+
+### Umbrales de decisión (SLO)
+
+Viven en [`canary/slo.yaml`](canary/slo.yaml), versionados con el código, y los
+aplica [`canary/gate.py`](canary/gate.py):
+
+| Resultado | Condición |
+|---|---|
+| **Pausar** | Menos de 100 peticiones en el canary (sin muestra suficiente), o un umbral de promoción incumplido sin llegar al de aborto; se reevalúa hasta 3 veces |
+| **Promover** | 5xx ≤ 1 %, p95 ≤ 800 ms, p99 ≤ 1500 ms, no más de 0,5 puntos de error ni 1,5 veces el p95 de la estable, CPU ≤ 80 % y memoria ≤ 85 % |
+| **Abortar** | 5xx > 5 %, p95 > 2000 ms o p95 más de 3 veces el de la estable |
+
+Se compara el canary contra la estable en la misma ventana, para separar el
+efecto del código nuevo de un mal momento de la plataforma.
+
+### Inyección de fallos
+
+Para simular una regresión sin tocar el código estable, el canary acepta la
+cabecera `X-Fault: error=0.5;latency=300` (fracción de errores 500 y
+milisegundos de demora). Solo funciona si la revisión tiene
+`FAULT_INJECTION=true`, que únicamente se pone en el canary; la estable no trae
+ese código. `/health` queda fuera para no confundir la salud de la plataforma
+con una falla real.
+
+### Observabilidad
+
+- **Dashboard** *StatsNostra v4: estable contra canary* (Cloud Monitoring, definido en
+  [`terraform/dashboard.tf`](terraform/dashboard.tf)): reparto de tráfico, errores 5xx,
+  latencia p50, p95 y p99, CPU, memoria y la métrica de negocio, con una línea por revisión.
+- **Métrica de negocio:** predicciones evaluadas por resultado (acierto o fallo), sacada de los
+  logs del servicio ([`terraform/monitoreo.tf`](terraform/monitoreo.tf)).
+- **Alertas** en Cloud Monitoring ([`terraform/alertas.tf`](terraform/alertas.tf)): 5xx del
+  canary sobre el 5 % y p95 sobre 2 s.
+- **Puerta de calidad** automática en el pipeline: aborta y deja 0 % canary / 100 % estable.
+
+### Cómo operarlo
+
+Los tres workflows son manuales (*Actions → Run workflow*):
+
+| Workflow | Qué hace |
+|---|---|
+| `Canary v4 · Desplegar al 0 %` | Construye las imágenes por digest, migra la base (primero la estable y luego el Expand) y despliega el canary sin tráfico público |
+| `Canary v4 · Promover por etapas` | Sube el tráfico a 10 %, 50 % y 100 % con horneado y puerta de calidad. El escenario `falla-errores` o `falla-latencia` simula una regresión para ver el aborto |
+| `Canary v4 · Revertir a la estable` | Rollback inmediato: 0 % canary, 100 % estable |
+
+Las migraciones corren como **trabajos de Cloud Run** con la misma imagen y la
+cuenta del servicio, así la contraseña de la base no sale de GCP.
+
+### Qué se retiró de la v3
+
+La v4 corre en Cloud Run y ya no necesita lo propio de Kubernetes: `gke.tf`,
+`redis.tf`, `ip.tf`, los manifiestos de `k8s/` y los workflows
+`terraform-v3-despliegue.yml` y `terraform-v3-destruir.yml`. La v3 completa,
+con GKE, sigue disponible en el tag [`v3.0.0`](https://github.com/MarianaPineda0/StatsNostra/tree/v3.0.0).
+Se conservan Cloud SQL, Artifact Registry y Secret Manager, que el canary también usa
+(carpeta [`terraform/`](terraform/)).
 
 ## ☸️ Arquitectura multicloud
 
