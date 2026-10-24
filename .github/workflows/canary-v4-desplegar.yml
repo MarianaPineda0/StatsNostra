@@ -77,3 +77,45 @@ jobs:
           docker push "$REPOSITORIO:canary-$SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:canary-$SHA")" >> "$GITHUB_OUTPUT"
+
+  desplegar:
+    name: Migrar y desplegar revisiones
+    needs: imagenes
+    runs-on: ubuntu-latest
+    env:
+      CUENTA_API: statsnostra-v4-run@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+      CONEXION_SQL: project-3f57bb8c-371e-4b9c-949:us-central1:statsnostra-v4-db-9f02
+    steps:
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Las migraciones corren como trabajo de Cloud Run: usan la misma imagen,
+      # la cuenta del servicio y el secreto con la URL de la base, asi la
+      # contraseña no sale de GCP ni hace falta un proxy en el runner
+      - name: Migrar la base al esquema de la estable
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
+        run: |
+          gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
+          gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+
+      # Fase Expand: con la imagen canary la migracion solo agrega columnas
+      # que admiten NULL, asi que la estable sigue funcionando mientras tanto
+      - name: Migración Expand con la imagen canary
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_canary }}
+        run: |
+          gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
+          gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
