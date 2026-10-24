@@ -58,24 +58,28 @@ resource "google_monitoring_dashboard" "canary" {
     displayName = "StatsNostra v4: estable contra canary"
     mosaicLayout = {
       columns = 12
-      # Dos graficos por fila, cada uno de la mitad del ancho
+      # Dos graficos por fila, cada uno de la mitad del ancho. La API de
+      # Monitoring guarda sin xPos/yPos cuando valen 0 y agrega targetAxis;
+      # escribirlo igual evita un cambio fantasma en cada plan.
       tiles = [
-        for i, grafico in local.graficos : {
-          xPos   = (i % 2) * 6
-          yPos   = floor(i / 2) * 4
-          width  = 6
-          height = 4
-          widget = {
-            title = grafico.titulo
-            xyChart = {
-              dataSets = [{
-                timeSeriesQuery = { prometheusQuery = grafico.consulta }
-                plotType        = grafico.tipo
-              }]
-              yAxis = { scale = "LINEAR" }
+        for i, grafico in local.graficos : merge(
+          { width = 6, height = 4 },
+          i % 2 == 1 ? { xPos = 6 } : {},
+          i >= 2 ? { yPos = floor(i / 2) * 4 } : {},
+          {
+            widget = {
+              title = grafico.titulo
+              xyChart = {
+                dataSets = [{
+                  timeSeriesQuery = { prometheusQuery = grafico.consulta }
+                  plotType        = grafico.tipo
+                  targetAxis      = "Y1"
+                }]
+                yAxis = { scale = "LINEAR" }
+              }
             }
           }
-        }
+        )
       ]
     }
   })
