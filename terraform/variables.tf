@@ -10,14 +10,8 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "zone" {
-  description = "Zona del clúster GKE"
-  type        = string
-  default     = "us-central1-a"
-}
-
 variable "nombre" {
   description = "Prefijo de los recursos creados"
   type        = string
-  default     = "statsnostra-v3"
+  default     = "statsnostra-v4"
 }
