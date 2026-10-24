@@ -10,6 +10,7 @@ seguir a la etapa siguiente o dejar el trafico en 0 % canary / 100 % estable.
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import urllib.parse
@@ -99,8 +100,10 @@ def _veces(canary: float | None, estable: float | None) -> float:
 
 
 def _token() -> str:
+    # which resuelve gcloud.cmd en Windows, donde subprocess no lo encuentra solo
+    gcloud = shutil.which("gcloud") or "gcloud"
     salida = subprocess.run(
-        ["gcloud", "auth", "print-access-token"], capture_output=True, text=True, check=True
+        [gcloud, "auth", "print-access-token"], capture_output=True, text=True, check=True
     )
     return salida.stdout.strip()
 
