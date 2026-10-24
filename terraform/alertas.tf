@@ -25,7 +25,7 @@ resource "google_monitoring_alert_policy" "canary_errores" {
 
   documentation {
     mime_type = "text/markdown"
-    content   = "El canary devuelve mas del 5 % de errores 5xx. Umbral definido en `canary/slo.yaml`. Accion: dejar 0 % de trafico al canary (`canary/revertir.sh`)."
+    content   = "El canary devuelve mas del 5 % de errores 5xx. Umbral definido en `canary/slo.yaml`. Accion: ejecutar el workflow `Canary v4 · Revertir a la estable` para dejar 0 % de trafico al canary."
   }
 
   depends_on = [google_project_service.apis]
