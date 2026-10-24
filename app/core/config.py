@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # del tag que se construyo) y TRACK, para saber que revision responde
     app_version: str = "0.1.0"
     track: Literal["stable", "canary"] = "stable"
+    # Habilita la cabecera X-Fault para simular fallas. Solo se enciende en
+    # la revision canary, nunca en la estable ni en produccion real
+    fault_injection: bool = False
 
     # Identifica el ambiente activo para logs y comportamiento condicional
     entorno: str = "desarrollo"
