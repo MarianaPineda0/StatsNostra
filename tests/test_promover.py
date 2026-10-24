@@ -93,3 +93,13 @@ def test_pausa_que_no_se_resuelve_termina_en_aborto():
 def test_espera_a_que_las_metricas_lleguen_antes_de_medir():
     _, falso = _correr([(_sana(), _sana())], etapas=(10,))
     assert falso.esperas == [90]
+
+
+def test_en_el_100_por_ciento_no_se_compara_con_la_estable():
+    # En la etapa final la estable trae datos viejos de las etapas anteriores,
+    # con un p95 mucho menor; comparar contra eso abortaria un canary sano
+    vieja = _sana(p95_ms=30)
+    canary_sano = _sana(p95_ms=120)
+    salida, falso = _correr([(canary_sano, vieja)], etapas=(100,))
+    assert salida == SALIDA_OK
+    assert falso.trafico == [{ESTABLE: 0, CANARY: 100}]

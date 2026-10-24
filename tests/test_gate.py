@@ -86,3 +86,21 @@ def test_sin_datos_de_la_estable_no_se_inventa_una_violacion():
 def test_escalera_de_errores(errores, esperado):
     # 500 peticiones: 0.4 %, 2 %, 8 % de errores
     assert decidir(SLO, _sana(errores_5xx=errores), _sana(errores_5xx=0))[0] == esperado
+
+
+def test_estable_sin_trafico_no_sirve_de_linea_base():
+    # Caso real de la etapa del 100 %: la estable ya no atiende nada y su p95
+    # sale de una muestra vacia; no debe provocar un aborto del canary sano
+    estable_sin_trafico = _sana(peticiones=0, p95_ms=23)
+    decision, _ = decidir(SLO, _sana(p95_ms=111), estable_sin_trafico)
+    assert decision == PROMOVER
+
+
+def test_con_poca_muestra_en_la_estable_se_juzga_solo_por_los_limites_absolutos():
+    decision, _ = decidir(SLO, _sana(p95_ms=300), _sana(peticiones=40, p95_ms=50))
+    assert decision == PROMOVER
+
+
+def test_los_limites_absolutos_siguen_valiendo_sin_linea_base():
+    decision, _ = decidir(SLO, _sana(p95_ms=2500), _sana(peticiones=0))
+    assert decision == ABORTAR
