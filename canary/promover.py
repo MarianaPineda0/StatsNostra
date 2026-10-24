@@ -60,6 +60,10 @@ def promover(
         ventana = bake_min + math.ceil(espera_metricas_s / 60) + 1
         for intento in range(pausa["reintentos_max"] + 1):
             medicion_canary, medicion_estable = entorno.medir(ventana)
+            if porcentaje >= 100:
+                # Ya no hay linea base en paralelo: la ventana todavia trae las
+                # peticiones de la etapa anterior y compararia contra un pasado
+                medicion_estable = gate.Medicion()
             decision, razones = gate.decidir(slo, medicion_canary, medicion_estable)
             log(_resumen(medicion_canary, medicion_estable, decision, razones))
             if decision != gate.PAUSAR:

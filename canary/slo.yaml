@@ -11,6 +11,10 @@
 muestra_minima:
   # Con menos de esto un solo error ya pesa demasiado: 1 de 50 es 2 %
   peticiones_canary: 100
+  # La estable solo sirve de comparacion si recibio trafico en la misma
+  # ventana; en la etapa del 100 % ya no lo recibe y se juzga solo por los
+  # limites absolutos
+  peticiones_estable: 100
 
 promover:
   tasa_error_5xx_max: 0.01      # hasta 1 % de respuestas 5xx

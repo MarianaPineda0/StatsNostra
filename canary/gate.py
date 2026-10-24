@@ -51,6 +51,9 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         ]
 
     ab, pr, sat = slo["abortar"], slo["promover"], slo["saturacion"]
+    # Comparar contra la estable solo tiene sentido si ella atendio trafico en
+    # la misma ventana; sin eso su p95 sale de una muestra vacia y engana
+    base_valida = estable.peticiones >= slo["muestra_minima"]["peticiones_estable"]
     razones_abortar = []
     if canary.tasa_error > ab["tasa_error_5xx_max"]:
         razones_abortar.append(
@@ -58,7 +61,7 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         )
     if canary.p95_ms is not None and canary.p95_ms > ab["latencia_p95_ms_max"]:
         razones_abortar.append(f"p95 {canary.p95_ms:.0f} ms > {ab['latencia_p95_ms_max']} ms")
-    if _veces(canary.p95_ms, estable.p95_ms) > ab["p95_vs_estable_max"]:
+    if base_valida and _veces(canary.p95_ms, estable.p95_ms) > ab["p95_vs_estable_max"]:
         razones_abortar.append(
             f"p95 {_veces(canary.p95_ms, estable.p95_ms):.1f} veces la de la estable "
             f"(limite {ab['p95_vs_estable_max']})"
@@ -71,13 +74,13 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         incumplidas.append(
             f"errores 5xx {canary.tasa_error:.1%} > {pr['tasa_error_5xx_max']:.1%}"
         )
-    if canary.tasa_error - estable.tasa_error > pr["error_extra_max"]:
+    if base_valida and canary.tasa_error - estable.tasa_error > pr["error_extra_max"]:
         incumplidas.append("mas errores que la estable en la misma ventana")
     if canary.p95_ms is not None and canary.p95_ms > pr["latencia_p95_ms_max"]:
         incumplidas.append(f"p95 {canary.p95_ms:.0f} ms > {pr['latencia_p95_ms_max']} ms")
     if canary.p99_ms is not None and canary.p99_ms > pr["latencia_p99_ms_max"]:
         incumplidas.append(f"p99 {canary.p99_ms:.0f} ms > {pr['latencia_p99_ms_max']} ms")
-    if _veces(canary.p95_ms, estable.p95_ms) > pr["p95_vs_estable_max"]:
+    if base_valida and _veces(canary.p95_ms, estable.p95_ms) > pr["p95_vs_estable_max"]:
         incumplidas.append("p95 por encima del limite relativo a la estable")
     if canary.cpu is not None and canary.cpu > sat["cpu_max"]:
         incumplidas.append(f"CPU {canary.cpu:.0%} > {sat['cpu_max']:.0%}")
