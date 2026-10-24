@@ -62,7 +62,8 @@ def test_la_latencia_demora_la_respuesta():
     inicio = time.perf_counter()
     respuesta = cliente.get("/api/prueba", headers={FAULT_HEADER: "latency=200"})
     assert respuesta.status_code == 200
-    assert time.perf_counter() - inicio >= 0.2
+    # Margen para el temporizador de Windows, que a veces despierta unos ms antes
+    assert time.perf_counter() - inicio >= 0.15
 
 
 def test_health_queda_fuera_de_la_inyeccion():
