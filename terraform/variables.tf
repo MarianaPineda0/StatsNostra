@@ -15,3 +15,9 @@ variable "nombre" {
   type        = string
   default     = "statsnostra-v4"
 }
+
+variable "servicio_cloud_run" {
+  description = "Nombre del servicio de Cloud Run que despliega el pipeline"
+  type        = string
+  default     = "statsnostra-api"
+}
