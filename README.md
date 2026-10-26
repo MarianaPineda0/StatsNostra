@@ -36,14 +36,25 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/GitHub%20Actions-Despliegue%20y%20destrucci%C3%B3n-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
 </p>
 
-**GitHub Actions** aparece en las tres: `pruebas.yml`/`produccion.yml` (v1 → Render), `despliegue-gke.yml` (v2 → GKE, retirado en la v3) y `terraform-v3-despliegue.yml`/`terraform-v3-destruir.yml` (v3 → infraestructura con Terraform).
+**v4**
+<p>
+  <img src="https://img.shields.io/badge/Cloud%20Run-Canary%20Deployment-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Cloud Run"/>
+  <img src="https://img.shields.io/badge/Cloud%20Monitoring-SLI%20%2F%20SLO-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Cloud Monitoring"/>
+  <img src="https://img.shields.io/badge/Terraform-Dashboard%20y%20alertas-844FBA?style=for-the-badge&logo=terraform&logoColor=white" alt="Terraform"/>
+  <img src="https://img.shields.io/badge/Cloud%20SQL-Expand%2FContract-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="Expand/Contract"/>
+  <img src="https://img.shields.io/badge/GitHub%20Actions-Promoci%C3%B3n%20por%20etapas-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+</p>
+
+**GitHub Actions** aparece en todas: `pruebas.yml`/`produccion.yml` (v1 → Render), `despliegue-gke.yml` (v2 → GKE, retirado en la v3), `terraform-v3-despliegue.yml`/`terraform-v3-destruir.yml` (v3 → GKE con Terraform, retirados en la v4) y `canary-v4-desplegar.yml`/`canary-v4-promover.yml`/`canary-v4-revertir.yml` (v4 → Canary Deployment en Cloud Run).
 
 ## 🔗 Enlaces en vivo
 
 | | Ambiente | URL |
 |---|---|---|
-| ☸️ | **GKE (v3)** — API (v1 + v2) | La IP la entrega el workflow `Despliegue v3 con Terraform` en su resumen; la infraestructura se destruye al terminar la sustentación |
-| 🏗️ | **Infraestructura v3** — Terraform | [`terraform/`](terraform/) |
+| 🐤 | **Cloud Run (v4)** — API estable (v1 + v2), con el canary conviviendo | [statsnostra-api-599897195726.us-central1.run.app](https://statsnostra-api-599897195726.us-central1.run.app) |
+| 📘 | **Cloud Run (v4)** — Swagger | [statsnostra-api-599897195726.us-central1.run.app/docs](https://statsnostra-api-599897195726.us-central1.run.app/docs) |
+| 🏗️ | **Infraestructura v4** — Terraform | [`terraform/`](terraform/) |
+| 🧪 | **Umbrales y puerta de calidad** | [`canary/`](canary/) |
 | 🟢 | **Pruebas** — API (Render, solo v1) | [statsnostra-pruebas.onrender.com](https://statsnostra-pruebas.onrender.com) |
 | 📘 | **Pruebas** — Swagger | [statsnostra-pruebas.onrender.com/docs](https://statsnostra-pruebas.onrender.com/docs) |
 | 🔵 | **Producción** — API (Render, solo v1) | [statsnostra-produccion.onrender.com](https://statsnostra-produccion.onrender.com) |
