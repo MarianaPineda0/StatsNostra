@@ -24,11 +24,15 @@ promover:
   # nuevo de un mal momento de la plataforma (arranque en frio, red)
   error_extra_max: 0.005        # puntos de error por encima de la estable
   p95_vs_estable_max: 1.5       # veces la latencia p95 de la estable
+  # La relacion solo cuenta si ademas la diferencia absoluta es relevante: 110 ms
+  # contra 29 ms es casi 4 veces pero no es una regresion que alguien note
+  p95_diferencia_min_ms: 150
 
 abortar:
   tasa_error_5xx_max: 0.05      # 5 %: regresion clara
   latencia_p95_ms_max: 2000
   p95_vs_estable_max: 3
+  p95_diferencia_min_ms: 300
 
 saturacion:
   cpu_max: 0.80                 # uso de CPU del contenedor canary

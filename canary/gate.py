@@ -61,7 +61,9 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         )
     if canary.p95_ms is not None and canary.p95_ms > ab["latencia_p95_ms_max"]:
         razones_abortar.append(f"p95 {canary.p95_ms:.0f} ms > {ab['latencia_p95_ms_max']} ms")
-    if base_valida and _veces(canary.p95_ms, estable.p95_ms) > ab["p95_vs_estable_max"]:
+    if base_valida and _empeora(
+        canary, estable, ab["p95_vs_estable_max"], ab["p95_diferencia_min_ms"]
+    ):
         razones_abortar.append(
             f"p95 {_veces(canary.p95_ms, estable.p95_ms):.1f} veces la de la estable "
             f"(limite {ab['p95_vs_estable_max']})"
@@ -80,7 +82,9 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         incumplidas.append(f"p95 {canary.p95_ms:.0f} ms > {pr['latencia_p95_ms_max']} ms")
     if canary.p99_ms is not None and canary.p99_ms > pr["latencia_p99_ms_max"]:
         incumplidas.append(f"p99 {canary.p99_ms:.0f} ms > {pr['latencia_p99_ms_max']} ms")
-    if base_valida and _veces(canary.p95_ms, estable.p95_ms) > pr["p95_vs_estable_max"]:
+    if base_valida and _empeora(
+        canary, estable, pr["p95_vs_estable_max"], pr["p95_diferencia_min_ms"]
+    ):
         incumplidas.append("p95 por encima del limite relativo a la estable")
     if canary.cpu is not None and canary.cpu > sat["cpu_max"]:
         incumplidas.append(f"CPU {canary.cpu:.0%} > {sat['cpu_max']:.0%}")
@@ -90,6 +94,23 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
     if incumplidas:
         return PAUSAR, incumplidas
     return PROMOVER, ["todos los umbrales de promocion se cumplen"]
+
+
+def _empeora(
+    canary: Medicion, estable: Medicion, veces_max: float, diferencia_min_ms: float
+) -> bool:
+    """El p95 del canary es peor que el de la estable de forma relevante.
+
+    Hace falta que se cumplan las dos condiciones: la relacion (veces) y una
+    diferencia en milisegundos. Con latencias de decenas de ms, la relacion
+    sola se dispara por ruido y abortaria canarios que estan perfectamente.
+    """
+    if canary.p95_ms is None or estable.p95_ms is None:
+        return False
+    return (
+        _veces(canary.p95_ms, estable.p95_ms) > veces_max
+        and canary.p95_ms - estable.p95_ms > diferencia_min_ms
+    )
 
 
 def _veces(canary: float | None, estable: float | None) -> float:
