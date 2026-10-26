@@ -21,6 +21,15 @@ locals {
       ])
     },
     {
+      titulo = "Errores 4xx (fracción de las peticiones)"
+      tipo   = "LINE"
+      # Mismo truco del "or ... * 0" que en los 5xx; los 4xx muestran errores del cliente
+      consulta = join(" / ", [
+        "(sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio},response_code_class=\"4xx\"}[1m])) or sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio}}[1m])) * 0)",
+        "sum by (revision_name) (rate(run_googleapis_com:request_count{${local.filtro_servicio}}[1m]))",
+      ])
+    },
+    {
       titulo   = "Latencia p50 (ms)"
       tipo     = "LINE"
       consulta = "histogram_quantile(0.50, sum by (le, revision_name) (rate(run_googleapis_com:request_latencies_bucket{${local.filtro_servicio}}[2m])))"
