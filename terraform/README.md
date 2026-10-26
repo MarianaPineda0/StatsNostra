@@ -1,47 +1,43 @@
-# 🏗️ StatsNostra v3 · Infraestructura como código
+# 🏗️ StatsNostra v4 · Infraestructura como código
 
-Esta carpeta es el corazón de la **v3 de StatsNostra (Entrega 3)**: con un solo
-comando de Terraform se levanta en Google Cloud todo lo que necesita el API de
-predicciones deportivas, y con otro se borra por completo.
+Esta carpeta define con Terraform lo que rodea al Canary Deployment de la v4:
+la base de datos, el registro de imágenes, los secretos, la cuenta con la que
+corre el API y todo el monitoreo (dashboard, alertas y métrica de negocio). Las
+dos revisiones de Cloud Run (estable y canary) las despliegan los workflows
+`canary-v4-*`, porque cambian en cada versión y su tráfico se reparte por etapas.
 
-> En la v2 la infraestructura se creó a mano desde la consola de GCP. En la v3
-> todo está escrito en código: es repetible, se revisa en Git y se puede destruir
-> para no gastar crédito.
+> La v3 de esta carpeta creaba un clúster de GKE, Redis y una IP fija. En la v4
+> el API corre en Cloud Run y esas piezas se retiraron; la v3 completa sigue en
+> el tag [`v3.0.0`](https://github.com/MarianaPineda0/StatsNostra/tree/v3.0.0/terraform).
 
 ## 🗺️ Qué se levanta
 
 ```mermaid
 flowchart LR
-    U[👤 Usuario] --> IP[📍 IP estática]
-    IP --> LB[⚖️ LoadBalancer]
-    subgraph GKE[☸️ GKE · statsnostra-v3-gke]
-        LB --> API[🐍 API FastAPI]
-        API --- PX[🔌 Cloud SQL Proxy]
-    end
-    PX --> SQL[(🐘 Cloud SQL<br/>PostgreSQL 16)]
-    API --> R[(⚡ Redis<br/>Memorystore)]
-    AR[📦 Artifact Registry] -. imagen .-> API
-    SM[🔐 Secret Manager] -. contraseña .-> SQL
+    CR[🐤 Cloud Run<br/>estable + canary] --> SQL[(🐘 Cloud SQL)]
+    CR -. lee .-> SM[🔐 Secret Manager]
+    AR[📦 Artifact Registry] -. imágenes .-> CR
+    CR -. métricas y logs .-> MON[📈 Cloud Monitoring<br/>dashboard · alertas · métrica de negocio]
 ```
 
-## 🧩 Un archivo por servicio
+## 🧩 Un archivo por tema
 
-| Archivo | Servicio de GCP | Qué crea |
-|---|---|---|
-| `gke.tf` | ☸️ Google Kubernetes Engine | Clúster zonal con 2 nodos `e2-medium` |
-| `cloudsql.tf` | 🐘 Cloud SQL | PostgreSQL 16, base `statsnostra_v3` y usuario `statsnostra_app` |
-| `redis.tf` | ⚡ Memorystore | Redis 7 de 1 GB que hace de caché del API |
-| `artifact_registry.tf` | 📦 Artifact Registry | Repositorio Docker para la imagen del API |
-| `ip.tf` | 📍 Compute Engine | IP externa estática para entrar al API |
-| `secretos.tf` | 🔐 Secret Manager | Contraseña de la base de datos |
-| `apis.tf` | 🔧 Service Usage | Activa las APIs de GCP que los demás servicios necesitan |
+| Archivo | Qué define |
+|---|---|
+| `versions.tf`, `providers.tf`, `variables.tf` | Versiones (Terraform 1.11+), provider de Google y variables (`nombre` vale `statsnostra-v4`) |
+| `backend.tf` | Estado remoto en un bucket de Cloud Storage; el nombre se pasa al hacer `init` |
+| `apis.tf` | Activa las APIs de Cloud Run, Cloud SQL, Artifact Registry, Secret Manager, Monitoring y Logging |
+| `cloudsql.tf` | Instancia de PostgreSQL 16 (con sufijo aleatorio en el nombre), base `statsnostra_v4` y usuario `statsnostra_app` |
+| `artifact_registry.tf` | Repositorio Docker `statsnostra-v4-repo` |
+| `secretos.tf` | Contraseña efímera, secreto con la contraseña y secreto con la `DATABASE_URL` de Cloud Run |
+| `cuentas.tf` | Cuenta de servicio del API en Cloud Run, solo con permiso para Cloud SQL |
+| `monitoreo.tf` | Métrica de negocio basada en logs: predicciones evaluadas por resultado |
+| `dashboard.tf` | Dashboard con estable y canary lado a lado: tráfico, errores, latencia p50/p95/p99, CPU, memoria y negocio |
+| `alertas.tf` | Alertas de errores 5xx y de latencia p95 del canary |
+| `outputs.tf` | Salidas con la conexión de Cloud SQL, el repositorio, los secretos y la cuenta del API |
 
-Y los archivos de apoyo: `versions.tf` (versiones), `providers.tf`,
-`backend.tf` (dónde se guarda el estado), `variables.tf`, `outputs.tf` y
-`terraform.tfvars.example`.
-
-Todo lleva el prefijo **`statsnostra-v3`** para distinguirlo de lo que se
-construyó en la v2.
+La contraseña de la base nunca queda en el código ni en el estado: se genera
+como recurso efímero y se entrega con atributos de solo escritura.
 
 ## ✅ Antes de empezar
 
@@ -49,126 +45,74 @@ construyó en la v2.
 - **Google Cloud CLI** con sesión iniciada → `gcloud auth application-default login`
 - Un **proyecto de GCP** con facturación activa y permisos de propietario
 
-## 🪣 Paso 1 · Bucket para el estado (una sola vez)
+## 🪣 Paso 1 · Bucket del estado y APIs previas (una sola vez)
 
-Terraform guarda lo que ha creado en un archivo de **estado**. Para que lo usen
-tanto tu computador como el pipeline, vive en un bucket de Cloud Storage. Este
-bucket se crea a mano y **no** forma parte del `destroy`, así el estado
-sobrevive aunque la infraestructura se borre.
+El estado de Terraform vive en un bucket de Cloud Storage, para que lo usen tu
+computador y cualquier pipeline. Se crea a mano y no se borra con el `destroy`.
 
 ```bash
-gcloud storage buckets create gs://statsnostra-v3-estado-3f57bb8c \
-  --project=project-3f57bb8c-371e-4b9c-949 \
-  --location=us-central1 \
-  --uniform-bucket-level-access \
-  --public-access-prevention
-
-gcloud storage buckets update gs://statsnostra-v3-estado-3f57bb8c --versioning
+gcloud storage buckets create gs://statsnostra-v4-estado-3f57bb8c --project=project-3f57bb8c-371e-4b9c-949 --location=us-central1 --uniform-bucket-level-access --public-access-prevention
 ```
 
-El versionado permite recuperar un estado anterior si algo sale mal.
+```bash
+gcloud storage buckets update gs://statsnostra-v4-estado-3f57bb8c --versioning
+```
 
-Terraform también necesita dos APIs activas desde antes: con ellas lee y
-administra el resto de las APIs del proyecto, así que no puede activarlas por
-sí mismo. Si faltan, el `plan` falla con un error 403 de *Cloud Resource
-Manager*.
+Terraform administra las demás APIs, pero necesita dos activas desde antes. Si
+faltan, el `plan` falla con un error 403 de *Cloud Resource Manager*:
 
 ```bash
-gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com --project=project-3f57bb8c-371e-4b9c-949
+gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com iam.googleapis.com --project=project-3f57bb8c-371e-4b9c-949
 ```
 
 ## 🚀 Paso 2 · Crear la infraestructura
 
-Desde esta carpeta (`terraform/`) son tres comandos:
+Desde esta carpeta (`terraform/`):
 
 | | Comando | Qué hace |
 |---|---|---|
-| 1️⃣ | `terraform init -backend-config="bucket=statsnostra-v3-estado-3f57bb8c"` | 📥 Descarga los providers y conecta con el bucket del estado |
-| 2️⃣ | `terraform plan` | 👀 Muestra qué se va a crear, sin tocar nada |
-| 3️⃣ | `terraform apply` | 🏗️ Crea todo. Tarda de 10 a 15 minutos, GKE es lo más lento |
+| 1️⃣ | `terraform init -backend-config="bucket=statsnostra-v4-estado-3f57bb8c"` | Descarga los providers y conecta con el estado |
+| 2️⃣ | `terraform plan` | Muestra qué se va a crear, sin tocar nada |
+| 3️⃣ | `terraform apply` | Crea todo; Cloud SQL tarda unos 6 minutos |
 
-> ⚙️ ¿Quieres cambiar la región, el prefijo o el proyecto? Copia
-> `terraform.tfvars.example` a `terraform.tfvars` y edítalo. Ese archivo está en
-> el `.gitignore`, así que no se sube al repositorio.
+Si quieres cambiar el proyecto, la región o el prefijo, copia
+`terraform.tfvars.example` a `terraform.tfvars`. Ese archivo está en el
+`.gitignore`.
 
-### 📤 Lo que devuelve Terraform
+## 🐤 Paso 3 · Desplegar el canary
 
-Al terminar, `terraform output` entrega los datos que usa el despliegue:
+La infraestructura queda lista pero sin API. Las revisiones se despliegan desde
+GitHub Actions (*Actions → Run workflow*): primero **`Canary v4 · Desplegar al 0 %`**
+y luego **`Canary v4 · Promover por etapas`**. El flujo completo, los umbrales y
+la compatibilidad de datos están explicados en la sección
+[*Canary Deployment (v4)*](../README.md#-canary-deployment-v4) del README principal.
 
-| Output | 🎯 Para qué sirve |
-|---|---|
-| `ip_api` | 📍 Dirección pública donde queda el API |
-| `cluster` | ☸️ Clúster al que se conecta `kubectl` |
-| `redis_host` | ⚡ IP privada de Redis (variable `REDIS_HOST`) |
-| `cloudsql_conexion` | 🐘 Nombre de conexión del Cloud SQL Proxy |
-| `repositorio_imagenes` | 📦 Ruta donde se sube la imagen Docker |
-| `secreto_db` | 🔐 Secreto que guarda la contraseña de la base |
+## 🧹 Paso 4 · Destruir
 
-> 🔒 **La contraseña de la base nunca aparece** en el código, en el estado ni en
-> los logs: Terraform la genera al vuelo y la guarda directo en Secret Manager.
-
-## 🧹 Paso 3 · Destruir todo (para no gastar crédito)
-
-Después de la sustentación hay que borrar la infraestructura. Hay un detalle
-importante: el `Service` de Kubernetes crea un balanceador de GCP por fuera de
-Terraform, y si sigue vivo bloquea la liberación de la IP. Por eso **primero se
-borra el Service y después se destruye**.
-
-| | Comando | Qué hace |
-|---|---|---|
-| 1️⃣ | `gcloud container clusters get-credentials statsnostra-v3-gke --zone us-central1-a` | 🔑 Conecta `kubectl` con el clúster |
-| 2️⃣ | `kubectl delete service statsnostra-api-service` | ⚖️ Libera el balanceador y la IP |
-| 3️⃣ | `terraform destroy` | 💥 Borra clúster, bases de datos, Redis, imagen, IP y secreto |
-
-> 🛡️ El bucket del estado **no se borra** con el `destroy`: es del Paso 1 y se
-> creó a mano, para que el estado sobreviva.
-
-Para comprobar que no queda nada que cobre:
+Al terminar, para no gastar crédito (Cloud SQL es el único servicio sin capa
+gratuita):
 
 ```bash
-gcloud container clusters list
+terraform destroy
+```
+
+Antes conviene borrar el servicio de Cloud Run y el trabajo de migración, que no
+están en Terraform:
+
+```bash
+gcloud run services delete statsnostra-api --region=us-central1 --project=project-3f57bb8c-371e-4b9c-949 --quiet
+```
+
+```bash
+gcloud run jobs delete statsnostra-migrar --region=us-central1 --project=project-3f57bb8c-371e-4b9c-949 --quiet
+```
+
+El bucket del estado no se borra con el `destroy`. Para comprobar que no queda
+nada que cobre:
+
+```bash
 gcloud sql instances list
-gcloud redis instances list --region=us-central1
-gcloud compute addresses list
+gcloud run services list --region=us-central1
+gcloud artifacts repositories list --location=us-central1
+gcloud secrets list
 ```
-
-Las cuatro listas deben salir vacías.
-
-## 🤖 Hacerlo todo desde GitHub Actions
-
-No hace falta correr nada en tu computador: dos workflows manuales hacen el
-trabajo. Se lanzan desde la pestaña **Actions** del repositorio con el botón
-**Run workflow**.
-
-### 🚀 `Despliegue v3 con Terraform`
-
-```mermaid
-flowchart LR
-    A[🔑 Login en GCP<br/>sin llaves] --> B[✅ fmt + validate]
-    B --> C[👀 plan]
-    C --> D[🏗️ apply]
-    D --> E[📦 Build de la imagen]
-    E --> F[☸️ Manifiestos en GKE]
-    F --> G[🐘 Migraciones]
-    G --> H[🩺 Prueba de humo]
-```
-
-| Job | Qué hace |
-|---|---|
-| 🏗️ `infraestructura` | Ejecuta Terraform completo y entrega los outputs al siguiente job |
-| 🚀 `aplicacion` | Construye la imagen con Buildpacks, crea el Secret con la contraseña de Secret Manager, aplica `k8s/`, corre las migraciones por el Cloud SQL Proxy y comprueba que `/health` responda |
-
-Al final, el resumen de la ejecución muestra la URL del API y de Swagger.
-
-### 💥 `Destrucción v3 con Terraform`
-
-Pide escribir **`DESTRUIR`** como confirmación, para que nadie lo lance por
-accidente. Después:
-
-1. ⚖️ Borra el Service de Kubernetes y espera a que GCP libere el balanceador.
-2. 💥 Ejecuta `terraform destroy`.
-3. 🔎 Revisa que no quede ningún clúster, base de datos, Redis, IP, secreto ni
-   repositorio. Si queda algo, el workflow falla y lo lista.
-
-> 🔑 **Autenticación:** los dos workflows entran a GCP con Workload Identity
-> Federation, así que no hay llaves JSON guardadas en GitHub.
