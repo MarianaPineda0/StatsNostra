@@ -104,3 +104,24 @@ def test_con_poca_muestra_en_la_estable_se_juzga_solo_por_los_limites_absolutos(
 def test_los_limites_absolutos_siguen_valiendo_sin_linea_base():
     decision, _ = decidir(SLO, _sana(p95_ms=2500), _sana(peticiones=0))
     assert decision == ABORTAR
+
+
+def test_diferencia_relativa_sin_diferencia_absoluta_no_cuenta():
+    # Caso real de la etapa del 50 %: 110 ms contra 29 ms es casi 4 veces,
+    # pero ambos estan lejos del limite y nadie notaria 80 ms de diferencia
+    decision, _ = decidir(SLO, _sana(p95_ms=110), _sana(p95_ms=29))
+    assert decision == PROMOVER
+
+
+def test_regresion_de_verdad_sigue_abortando():
+    # 900 ms contra 200 ms: 4,5 veces y 700 ms de diferencia
+    decision, razones = decidir(SLO, _sana(p95_ms=900), _sana(p95_ms=200))
+    assert decision == ABORTAR
+    assert any("estable" in r for r in razones)
+
+
+def test_relacion_alta_con_diferencia_moderada_pausa_pero_no_aborta():
+    # 250 ms contra 90 ms: 2,8 veces, 160 ms de diferencia. Supera lo que
+    # permite promover (1,5 veces y 150 ms) pero no el limite de abortar
+    decision, _ = decidir(SLO, _sana(p95_ms=250), _sana(p95_ms=90))
+    assert decision == PAUSAR
