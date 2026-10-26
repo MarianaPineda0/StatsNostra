@@ -103,3 +103,13 @@ def test_en_el_100_por_ciento_no_se_compara_con_la_estable():
     salida, falso = _correr([(canary_sano, vieja)], etapas=(100,))
     assert salida == SALIDA_OK
     assert falso.trafico == [{ESTABLE: 0, CANARY: 100}]
+
+
+def test_la_ventana_de_medicion_deja_fuera_el_calentamiento():
+    ventanas = []
+    falso = EntornoFalso([(_sana(), _sana())])
+    entorno = falso.entorno()
+    entorno.medir = lambda ventana: (ventanas.append(ventana), falso.mediciones.pop(0))[1]
+    promover(SLO, [10], 3, 90, CANARY, ESTABLE, entorno, log=lambda _: None)
+    # 3 min de carga + 90 s de espera - 90 s de calentamiento = 3 min medidos
+    assert ventanas == [3]

@@ -56,8 +56,11 @@ def promover(
         # Cloud Monitoring tarda en publicar lo que acaba de pasar
         entorno.dormir(espera_metricas_s)
 
-        # Ventana que cubre el horneado y la espera, con un minuto de margen
-        ventana = bake_min + math.ceil(espera_metricas_s / 60) + 1
+        # La ventana empieza despues del calentamiento y termina ahora, cuando ya
+        # esperamos las metricas; el retraso de Cloud Monitoring afecta al final
+        # de la ventana, no a su inicio, asi que no hace falta margen extra
+        calentamiento = slo.get("calentamiento_segundos", 0)
+        ventana = max(1, math.ceil((bake_min * 60 - calentamiento + espera_metricas_s) / 60))
         for intento in range(pausa["reintentos_max"] + 1):
             medicion_canary, medicion_estable = entorno.medir(ventana)
             if porcentaje >= 100:
@@ -141,7 +144,7 @@ def main() -> int:
     parser.add_argument("--etapas", default="10,50,100", help="porcentajes separados por coma")
     parser.add_argument("--bake", type=int, default=3, help="minutos de horneado por etapa")
     parser.add_argument("--espera-metricas", type=int, default=90, help="segundos")
-    parser.add_argument("--hilos", type=int, default=20)
+    parser.add_argument("--hilos", type=int, default=14)
     parser.add_argument(
         "--hilos-negocio", type=int, default=4, help="ciclos de partidos en paralelo"
     )

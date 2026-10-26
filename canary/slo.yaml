@@ -8,6 +8,11 @@
 #   3. Todos los limites de `promover` se cumplen         -> PROMOVER
 #   4. Cualquier otro caso                                -> PAUSAR y reevaluar
 
+# Tras cada cambio de trafico el canary arranca instancias nuevas en frio y sus
+# primeras respuestas tardan mucho mas que las de una instancia caliente. Esos
+# segundos no cuentan para decidir: se mide lo que pasa con el servicio ya estable
+calentamiento_segundos: 90
+
 muestra_minima:
   # Con menos de esto un solo error ya pesa demasiado: 1 de 50 es 2 %
   peticiones_canary: 100
@@ -26,7 +31,10 @@ promover:
   # Contra la estable en la misma ventana, para separar el efecto del codigo
   # nuevo de un mal momento de la plataforma (arranque en frio, red)
   error_extra_max: 0.005        # puntos de error por encima de la estable
-  p95_vs_estable_max: 1.5       # veces la latencia p95 de la estable
+  # Medido con carga real: el canary sano llega a 1,9 veces el p95 de la estable
+  # porque atiende pocas peticiones con pocas instancias; 2,5 deja margen sin
+  # esconder una regresion (el aborto sigue en 3 veces y 2000 ms)
+  p95_vs_estable_max: 2.5       # veces la latencia p95 de la estable
   # La relacion solo cuenta si ademas la diferencia absoluta es relevante: 110 ms
   # contra 29 ms es casi 4 veces pero no es una regresion que alguien note
   p95_diferencia_min_ms: 150
