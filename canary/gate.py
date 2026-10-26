@@ -36,10 +36,17 @@ class Medicion:
     p99_ms: float | None = None
     cpu: float | None = None
     memoria: float | None = None
+    # Metrica de negocio: predicciones evaluadas al finalizar partidos y cuantas acertaron
+    evaluadas: float = 0.0
+    aciertos: float = 0.0
 
     @property
     def tasa_error(self) -> float:
         return self.errores_5xx / self.peticiones if self.peticiones else 0.0
+
+    @property
+    def tasa_acierto(self) -> float | None:
+        return self.aciertos / self.evaluadas if self.evaluadas else None
 
 
 def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[str]]:
@@ -54,7 +61,13 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
     # Comparar contra la estable solo tiene sentido si ella atendio trafico en
     # la misma ventana; sin eso su p95 sale de una muestra vacia y engana
     base_valida = estable.peticiones >= slo["muestra_minima"]["peticiones_estable"]
+    # Igual que con la latencia: la tasa de aciertos solo se compara si los dos
+    # tracks evaluaron suficientes predicciones en la ventana
+    minimo = slo["muestra_minima"]["evaluaciones"]
+    negocio_valido = base_valida and canary.evaluadas >= minimo and estable.evaluadas >= minimo
     razones_abortar = []
+    if negocio_valido and _cae_acierto(canary, estable, ab["acierto_caida_max"]):
+        razones_abortar.append(_texto_acierto(canary, estable))
     if canary.tasa_error > ab["tasa_error_5xx_max"]:
         razones_abortar.append(
             f"errores 5xx {canary.tasa_error:.1%} > {ab['tasa_error_5xx_max']:.1%}"
@@ -86,6 +99,8 @@ def decidir(slo: dict, canary: Medicion, estable: Medicion) -> tuple[str, list[s
         canary, estable, pr["p95_vs_estable_max"], pr["p95_diferencia_min_ms"]
     ):
         incumplidas.append("p95 por encima del limite relativo a la estable")
+    if negocio_valido and _cae_acierto(canary, estable, pr["acierto_caida_max"]):
+        incumplidas.append(_texto_acierto(canary, estable))
     if canary.cpu is not None and canary.cpu > sat["cpu_max"]:
         incumplidas.append(f"CPU {canary.cpu:.0%} > {sat['cpu_max']:.0%}")
     if canary.memoria is not None and canary.memoria > sat["memoria_max"]:
@@ -110,6 +125,17 @@ def _empeora(
     return (
         _veces(canary.p95_ms, estable.p95_ms) > veces_max
         and canary.p95_ms - estable.p95_ms > diferencia_min_ms
+    )
+
+
+def _cae_acierto(canary: Medicion, estable: Medicion, caida_max: float) -> bool:
+    return estable.tasa_acierto - canary.tasa_acierto > caida_max
+
+
+def _texto_acierto(canary: Medicion, estable: Medicion) -> str:
+    return (
+        f"tasa de aciertos {canary.tasa_acierto:.0%} contra {estable.tasa_acierto:.0%} "
+        "de la estable"
     )
 
 
@@ -169,7 +195,18 @@ def medir(
         )
         return _consultar(proyecto, consulta, token) or 0.0
 
+    def evaluaciones(extra: str = "") -> float:
+        # Metrica basada en logs (terraform/monitoreo.tf): una por prediccion evaluada
+        consulta = (
+            "sum(increase(logging_googleapis_com:user_statsnostra_v4_predicciones_evaluadas"
+            f'{{monitored_resource="cloud_run_revision",revision_name="{revision}"{extra}}}'
+            f"[{ventana}]))"
+        )
+        return _consultar(proyecto, consulta, token) or 0.0
+
     return Medicion(
+        evaluadas=evaluaciones(),
+        aciertos=evaluaciones(',acertada="true"'),
         peticiones=contar(),
         errores_5xx=contar(',response_code_class="5xx"'),
         p50_ms=percentil("request_latencies", 0.50),
@@ -187,8 +224,15 @@ def _fila(nombre: str, m: Medicion) -> str:
     return (
         f"{nombre:<8} {m.peticiones:>8.0f} {m.tasa_error:>7.2%} {f(m.p50_ms, '.0f'):>7} "
         f"{f(m.p95_ms, '.0f'):>7} {f(m.p99_ms, '.0f'):>7} "
-        f"{f(m.cpu, '.0%'):>6} {f(m.memoria, '.0%'):>6}"
+        f"{f(m.cpu, '.0%'):>6} {f(m.memoria, '.0%'):>6} "
+        f"{m.evaluadas:>6.0f} {f(m.tasa_acierto, '.0%'):>8}"
     )
+
+
+ENCABEZADO = (
+    f"{'':<8} {'peticion':>8} {'err5xx':>7} {'p50ms':>7} {'p95ms':>7} {'p99ms':>7} "
+    f"{'cpu':>6} {'mem':>6} {'eval':>6} {'aciertos':>8}"
+)
 
 
 def main() -> int:
@@ -207,10 +251,7 @@ def main() -> int:
     estable = medir(args.proyecto, args.servicio, args.estable, args.ventana, token)
 
     decision, razones = decidir(slo, canary, estable)
-    print(
-        f"{'':<8} {'peticion':>8} {'err5xx':>7} {'p50ms':>7} {'p95ms':>7} {'p99ms':>7} "
-        f"{'cpu':>6} {'mem':>6}"
-    )
+    print(ENCABEZADO)
     print(_fila("estable", estable))
     print(_fila("canary", canary))
     print(f"\nDECISION: {decision}")

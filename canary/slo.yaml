@@ -15,6 +15,9 @@ muestra_minima:
   # ventana; en la etapa del 100 % ya no lo recibe y se juzga solo por los
   # limites absolutos
   peticiones_estable: 100
+  # Predicciones evaluadas por track para comparar la tasa de aciertos; con
+  # menos la senal de negocio no se usa para decidir
+  evaluaciones: 10
 
 promover:
   tasa_error_5xx_max: 0.01      # hasta 1 % de respuestas 5xx
@@ -27,12 +30,16 @@ promover:
   # La relacion solo cuenta si ademas la diferencia absoluta es relevante: 110 ms
   # contra 29 ms es casi 4 veces pero no es una regresion que alguien note
   p95_diferencia_min_ms: 150
+  # Metrica de negocio: la tasa de aciertos de las predicciones evaluadas no
+  # puede caer mas que esto respecto a la estable (puntos porcentuales)
+  acierto_caida_max: 0.15
 
 abortar:
   tasa_error_5xx_max: 0.05      # 5 %: regresion clara
   latencia_p95_ms_max: 2000
   p95_vs_estable_max: 3
   p95_diferencia_min_ms: 300
+  acierto_caida_max: 0.30
 
 saturacion:
   cpu_max: 0.80                 # uso de CPU del contenedor canary

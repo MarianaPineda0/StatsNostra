@@ -125,3 +125,36 @@ def test_relacion_alta_con_diferencia_moderada_pausa_pero_no_aborta():
     # permite promover (1,5 veces y 150 ms) pero no el limite de abortar
     decision, _ = decidir(SLO, _sana(p95_ms=250), _sana(p95_ms=90))
     assert decision == PAUSAR
+
+
+def test_caida_moderada_de_aciertos_pausa():
+    # 75 % contra 100 % de la estable: cae 25 puntos, mas que lo que deja
+    # promover (15) pero menos que lo que obliga a abortar (30)
+    decision, razones = decidir(
+        SLO, _sana(evaluadas=40, aciertos=30), _sana(evaluadas=40, aciertos=40)
+    )
+    assert decision == PAUSAR
+    assert any("aciertos" in r for r in razones)
+
+
+def test_caida_fuerte_de_aciertos_aborta():
+    # 10 % contra 50 % de la estable: cae 40 puntos
+    decision, razones = decidir(
+        SLO, _sana(evaluadas=40, aciertos=4), _sana(evaluadas=40, aciertos=20)
+    )
+    assert decision == ABORTAR
+    assert any("aciertos" in r for r in razones)
+
+
+def test_aciertos_iguales_a_la_estable_no_bloquean():
+    decision, _ = decidir(
+        SLO, _sana(evaluadas=40, aciertos=20), _sana(evaluadas=40, aciertos=20)
+    )
+    assert decision == PROMOVER
+
+
+def test_con_pocas_evaluaciones_la_metrica_de_negocio_no_decide():
+    decision, _ = decidir(
+        SLO, _sana(evaluadas=5, aciertos=0), _sana(evaluadas=40, aciertos=20)
+    )
+    assert decision == PROMOVER
