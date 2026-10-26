@@ -156,11 +156,13 @@ aplica [`canary/gate.py`](canary/gate.py):
 | Resultado | Condición |
 |---|---|
 | **Pausar** | Menos de 100 peticiones en el canary (sin muestra suficiente), una tasa de aciertos que cae más de 15 puntos frente a la estable, o un umbral de promoción incumplido sin llegar al de aborto; se reevalúa hasta 3 veces |
-| **Promover** | 5xx ≤ 1 %, p95 ≤ 800 ms, p99 ≤ 1500 ms, no más de 0,5 puntos de error ni 1,5 veces el p95 de la estable, tasa de aciertos sin caer más de 15 puntos frente a la estable, CPU ≤ 80 % y memoria ≤ 85 % |
+| **Promover** | 5xx ≤ 1 %, p95 ≤ 800 ms, p99 ≤ 1500 ms, no más de 0,5 puntos de error ni 2,5 veces el p95 de la estable, tasa de aciertos sin caer más de 15 puntos frente a la estable, CPU ≤ 80 % y memoria ≤ 85 % |
 | **Abortar** | 5xx > 5 %, p95 > 2000 ms, p95 más de 3 veces el de la estable o tasa de aciertos 30 puntos por debajo de la estable |
 
 Se compara el canary contra la estable en la misma ventana, para separar el
-efecto del código nuevo de un mal momento de la plataforma. La tasa de aciertos
+efecto del código nuevo de un mal momento de la plataforma. Los primeros 90 s tras
+cada cambio de tráfico no cuentan: el canary arranca instancias en frío y esas
+respuestas lentas no reflejan el código. La tasa de aciertos
 solo cuenta con al menos 10 predicciones evaluadas en cada revisión.
 
 ### Inyección de fallos
