@@ -176,7 +176,7 @@ con una falla real.
 
 - **Dashboard** *StatsNostra v4: estable contra canary* (Cloud Monitoring, definido en
   [`terraform/dashboard.tf`](terraform/dashboard.tf)): reparto de tráfico, errores 5xx,
-  latencia p50, p95 y p99, CPU, memoria y la métrica de negocio, con una línea por revisión.
+  errores 4xx, latencia p50, p95 y p99, CPU, memoria y la métrica de negocio, con una línea por revisión.
 - **Métrica de negocio:** predicciones evaluadas por resultado (acierto o fallo), sacada de los
   logs del servicio ([`terraform/monitoreo.tf`](terraform/monitoreo.tf)).
 - **Alertas** en Cloud Monitoring ([`terraform/alertas.tf`](terraform/alertas.tf)): 5xx del
@@ -189,7 +189,7 @@ Los tres workflows son manuales (*Actions → Run workflow*):
 
 | Workflow | Qué hace |
 |---|---|
-| `Canary v4 · Desplegar al 0 %` | Construye las imágenes por digest, migra la base (primero la estable y luego el Expand) y despliega el canary sin tráfico público |
+| `Canary v4 · Desplegar al 0 %` | Construye las imágenes por digest, migra la base con el Expand (la estable solo migra si el servicio aún no existe) y despliega el canary sin tráfico público |
 | `Canary v4 · Promover por etapas` | Sube el tráfico a 10 %, 50 % y 100 % con horneado y puerta de calidad. El escenario `falla-errores` o `falla-latencia` simula una regresión para ver el aborto |
 | `Canary v4 · Revertir a la estable` | Rollback inmediato: 0 % canary, 100 % estable |
 
