@@ -97,18 +97,40 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      # Si el servicio ya existe, la linea base es la revision que hoy atiende
+      # el 100 %. Si no, se crea la estable: primero se migra la base a su
+      # esquema y luego se despliega. Esa migracion solo va aqui porque la
+      # imagen estable no conoce las migraciones posteriores y fallaria con una
+      # base que ya paso por el Expand.
       # Las migraciones corren como trabajo de Cloud Run: usan la misma imagen,
       # la cuenta del servicio y el secreto con la URL de la base, asi la
-      # contraseña no sale de GCP ni hace falta un proxy en el runner
-      - name: Migrar la base al esquema de la estable
+      # contraseña no sale de GCP ni hace falta un proxy en el runner.
+      - name: Revisión estable (línea base)
+        id: estable
         env:
           IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
+          SHA: ${{ needs.imagenes.outputs.sha_estable }}
+          REF: ${{ inputs.ref_estable }}
         run: |
-          gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
-            --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
-            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
-            --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
-          gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+          if gcloud run services describe $SERVICIO --region=$REGION >/dev/null 2>&1; then
+            BASE=$(gcloud run services describe $SERVICIO --region=$REGION --format=json \
+              | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
+          else
+            gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
+              --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
+              --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+              --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
+            gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+            gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
+              --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
+              --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+              --set-env-vars="APP_VERSION=${REF#v},TRACK=stable" --port=8000 \
+              --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+              --revision-suffix="estable-$SHA"
+            BASE="$SERVICIO-estable-$SHA"
+          fi
+          gcloud run services update-traffic $SERVICIO --region=$REGION --update-tags="estable=$BASE"
+          echo "revision=$BASE" >> "$GITHUB_OUTPUT"
 
       # Fase Expand: con la imagen canary la migracion solo agrega columnas
       # que admiten NULL, asi que la estable sigue funcionando mientras tanto
@@ -121,30 +143,6 @@ jobs:
             --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
             --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
           gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
-
-      # Si el servicio ya existe, la linea base es la revision que hoy atiende
-      # el 100 %; si no, se crea la estable con la imagen de ref_estable
-      - name: Revisión estable (línea base)
-        id: estable
-        env:
-          IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
-          SHA: ${{ needs.imagenes.outputs.sha_estable }}
-          REF: ${{ inputs.ref_estable }}
-        run: |
-          if gcloud run services describe $SERVICIO --region=$REGION >/dev/null 2>&1; then
-            BASE=$(gcloud run services describe $SERVICIO --region=$REGION --format=json \
-              | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
-          else
-            gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
-              --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
-              --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
-              --set-env-vars="APP_VERSION=${REF#v},TRACK=stable" --port=8000 \
-              --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
-              --revision-suffix="estable-$SHA"
-            BASE="$SERVICIO-estable-$SHA"
-          fi
-          gcloud run services update-traffic $SERVICIO --region=$REGION --update-tags="estable=$BASE"
-          echo "revision=$BASE" >> "$GITHUB_OUTPUT"
 
       # --no-traffic: la revision queda desplegada pero el publico no la ve.
       # Solo se llega a ella por su URL de revision (etapa 0).
