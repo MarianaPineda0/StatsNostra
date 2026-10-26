@@ -5,15 +5,18 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.routes import (
     apostadores,
     apostadores_v2,
+    apostadores_v4,
     cache,
     consultas,
     partidos,
     partidos_v2,
     predicciones,
     predicciones_v2,
+    predicciones_v4,
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
+from app.core.fallos import InyeccionFallosMiddleware
 from app.core.logging_config import configurar_logging
 from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware, VersionMiddleware
 from app.core.tracing import configurar_tracing
@@ -29,6 +32,11 @@ configurar_tracing(
     settings.grafana_otlp_token,
     settings.otel_service_name,
 )
+
+# El primero que se agrega queda mas adentro: asi hasta un 500 inyectado
+# sale con trace-id, version y track como cualquier otra respuesta
+if settings.fault_injection:
+    app.add_middleware(InyeccionFallosMiddleware)
 
 app.add_middleware(MetodoOverrideMiddleware)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
@@ -55,6 +63,10 @@ app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
 app.include_router(cache.router)
+
+# Solo existe en la imagen canary: la estable (v3.0.0) no tiene /api/v4
+app.include_router(predicciones_v4.router)
+app.include_router(apostadores_v4.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.

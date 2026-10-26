@@ -1,0 +1,199 @@
+name: Canary v4 · Desplegar al 0 %
+
+# Manual: construye las imagenes, migra la base y deja la revision canary
+# desplegada sin trafico publico (etapa 0). La promocion es otro workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      ref_estable:
+        description: "Tag o rama de la version estable (solo se usa si el servicio aun no existe)"
+        default: "v3.0.0"
+        required: true
+      ref_canary:
+        description: "Tag o rama de la version canary"
+        default: "main"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  SERVICIO: statsnostra-api
+  REPOSITORIO: us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-v4-repo/statsnostra-api
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+jobs:
+  imagenes:
+    name: Construir imágenes por digest
+    runs-on: ubuntu-latest
+    outputs:
+      imagen_estable: ${{ steps.estable.outputs.imagen }}
+      sha_estable: ${{ steps.estable.outputs.sha }}
+      imagen_canary: ${{ steps.canary.outputs.imagen }}
+      sha_canary: ${{ steps.canary.outputs.sha }}
+    steps:
+      - name: Código de la estable
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_estable }}
+          path: estable-src
+
+      - name: Código del canary
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_canary }}
+          path: canary-src
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Autenticar Docker con Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Se despliega por digest (sha256), no por etiqueta: una etiqueta se puede
+      # mover y el digest siempre apunta a exactamente la misma imagen
+      - name: Imagen estable
+        id: estable
+        run: |
+          SHA=$(git -C estable-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORIO:estable-$SHA" estable-src
+          docker push "$REPOSITORIO:estable-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:estable-$SHA")" >> "$GITHUB_OUTPUT"
+
+      - name: Imagen canary
+        id: canary
+        run: |
+          SHA=$(git -C canary-src rev-parse --short HEAD)
+          docker build -t "$REPOSITORIO:canary-$SHA" canary-src
+          docker push "$REPOSITORIO:canary-$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "imagen=$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORIO:canary-$SHA")" >> "$GITHUB_OUTPUT"
+
+  desplegar:
+    name: Migrar y desplegar revisiones
+    needs: imagenes
+    runs-on: ubuntu-latest
+    env:
+      CUENTA_API: statsnostra-v4-run@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+      CONEXION_SQL: project-3f57bb8c-371e-4b9c-949:us-central1:statsnostra-v4-db-9f02
+    steps:
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Las migraciones corren como trabajo de Cloud Run: usan la misma imagen,
+      # la cuenta del servicio y el secreto con la URL de la base, asi la
+      # contraseña no sale de GCP ni hace falta un proxy en el runner
+      - name: Migrar la base al esquema de la estable
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
+        run: |
+          gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
+          gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+
+      # Fase Expand: con la imagen canary la migracion solo agrega columnas
+      # que admiten NULL, asi que la estable sigue funcionando mientras tanto
+      - name: Migración Expand con la imagen canary
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_canary }}
+        run: |
+          gcloud run jobs deploy statsnostra-migrar --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --set-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
+          gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
+
+      # Si el servicio ya existe, la linea base es la revision que hoy atiende
+      # el 100 %; si no, se crea la estable con la imagen de ref_estable
+      - name: Revisión estable (línea base)
+        id: estable
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_estable }}
+          SHA: ${{ needs.imagenes.outputs.sha_estable }}
+          REF: ${{ inputs.ref_estable }}
+        run: |
+          if gcloud run services describe $SERVICIO --region=$REGION >/dev/null 2>&1; then
+            BASE=$(gcloud run services describe $SERVICIO --region=$REGION --format=json \
+              | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')
+          else
+            gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
+              --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
+              --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+              --set-env-vars="APP_VERSION=${REF#v},TRACK=stable" --port=8000 \
+              --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+              --revision-suffix="estable-$SHA"
+            BASE="$SERVICIO-estable-$SHA"
+          fi
+          gcloud run services update-traffic $SERVICIO --region=$REGION --update-tags="estable=$BASE"
+          echo "revision=$BASE" >> "$GITHUB_OUTPUT"
+
+      # --no-traffic: la revision queda desplegada pero el publico no la ve.
+      # Solo se llega a ella por su URL de revision (etapa 0).
+      - name: Revisión canary sin tráfico
+        id: canary
+        env:
+          IMAGEN: ${{ needs.imagenes.outputs.imagen_canary }}
+          SHA: ${{ needs.imagenes.outputs.sha_canary }}
+          REF: ${{ inputs.ref_canary }}
+        run: |
+          # Un tag de version (v4.0.0) da 4.0.0; una rama da una version de prueba
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then VERSION="${REF#v}"; else VERSION="4.0.0-rc.$SHA"; fi
+          REVISION="canary-$SHA-$GITHUB_RUN_NUMBER"
+          gcloud run deploy $SERVICIO --region=$REGION --image="$IMAGEN" \
+            --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
+            --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
+            --set-env-vars="APP_VERSION=$VERSION,TRACK=canary,FAULT_INJECTION=true" --port=8000 \
+            --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+            --revision-suffix="$REVISION" --tag=canary --no-traffic
+          echo "revision=$SERVICIO-$REVISION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Etapa 0: el canary responde por su URL de revision y el publico sigue
+      # en la estable. Si algo de esto falla, no se debe promover.
+      - name: Prueba de humo de la etapa 0
+        env:
+          CANARY: ${{ steps.canary.outputs.revision }}
+        run: |
+          DATOS=$(gcloud run services describe $SERVICIO --region=$REGION --format=json)
+          PUBLICA=$(echo "$DATOS" | jq -r '.status.url')
+          URL_CANARY=$(echo "$DATOS" | jq -r '.status.traffic[] | select(.tag=="canary") | .url')
+
+          echo "Canary por su URL de revisión:"
+          curl -fsS -D - "$URL_CANARY/health" | tee /tmp/canary.txt
+          grep -qi "x-track: canary" /tmp/canary.txt
+          curl -fsS -o /dev/null "$URL_CANARY/api/v4/predicciones"
+
+          echo "El público no debe ver el canary:"
+          for i in $(seq 1 10); do curl -fsS -D - -o /dev/null "$PUBLICA/health" | grep -i "^x-track"; done | sort | uniq -c
+          ! curl -fsS -D - -o /dev/null "$PUBLICA/health" | grep -qi "x-track: canary"
+
+          {
+            echo "### Canary v4 desplegado al 0 %"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Servicio público | $PUBLICA |"
+            echo "| URL de revisión del canary | $URL_CANARY |"
+            echo "| Revisión estable | ${{ steps.estable.outputs.revision }} |"
+            echo "| Revisión canary | $CANARY |"
+            echo "| Versión canary | ${{ steps.canary.outputs.version }} |"
+            echo "| Imagen canary | ${{ needs.imagenes.outputs.imagen_canary }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

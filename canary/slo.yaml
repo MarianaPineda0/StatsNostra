@@ -1,0 +1,45 @@
+# Umbrales que deciden cada etapa del canary. Se fijan antes de desplegar y
+# los aplica canary/gate.py: promover, pausar o abortar no depende de que
+# alguien mire un tablero a tiempo.
+#
+# Decision de cada etapa, en este orden:
+#   1. Menos peticiones que `muestra_minima` en el canary -> PAUSAR (no hay datos)
+#   2. Algun limite de `abortar` superado                 -> ABORTAR (0 % canary)
+#   3. Todos los limites de `promover` se cumplen         -> PROMOVER
+#   4. Cualquier otro caso                                -> PAUSAR y reevaluar
+
+muestra_minima:
+  # Con menos de esto un solo error ya pesa demasiado: 1 de 50 es 2 %
+  peticiones_canary: 100
+  # La estable solo sirve de comparacion si recibio trafico en la misma
+  # ventana; en la etapa del 100 % ya no lo recibe y se juzga solo por los
+  # limites absolutos
+  peticiones_estable: 100
+
+promover:
+  tasa_error_5xx_max: 0.01      # hasta 1 % de respuestas 5xx
+  latencia_p95_ms_max: 800
+  latencia_p99_ms_max: 1500
+  # Contra la estable en la misma ventana, para separar el efecto del codigo
+  # nuevo de un mal momento de la plataforma (arranque en frio, red)
+  error_extra_max: 0.005        # puntos de error por encima de la estable
+  p95_vs_estable_max: 1.5       # veces la latencia p95 de la estable
+  # La relacion solo cuenta si ademas la diferencia absoluta es relevante: 110 ms
+  # contra 29 ms es casi 4 veces pero no es una regresion que alguien note
+  p95_diferencia_min_ms: 150
+
+abortar:
+  tasa_error_5xx_max: 0.05      # 5 %: regresion clara
+  latencia_p95_ms_max: 2000
+  p95_vs_estable_max: 3
+  p95_diferencia_min_ms: 300
+
+saturacion:
+  cpu_max: 0.80                 # uso de CPU del contenedor canary
+  memoria_max: 0.85
+
+# Cuantas veces se reevalua una etapa en PAUSAR antes de abortar por falta de
+# evidencia, y cuanto se espera entre evaluaciones
+pausa:
+  reintentos_max: 3
+  espera_segundos: 60

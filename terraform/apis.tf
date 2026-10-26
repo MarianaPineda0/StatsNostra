@@ -1,11 +1,11 @@
 locals {
   apis = [
-    "compute.googleapis.com",
-    "container.googleapis.com",
+    "run.googleapis.com",
     "sqladmin.googleapis.com",
-    "redis.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
+    "monitoring.googleapis.com",
+    "logging.googleapis.com",
   ]
 }
 

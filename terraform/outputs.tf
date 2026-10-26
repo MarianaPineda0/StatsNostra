@@ -1,18 +1,3 @@
-output "ip_api" {
-  description = "IP pública estática por la que se accede al API"
-  value       = google_compute_address.api.address
-}
-
-output "cluster" {
-  description = "Nombre del clúster GKE"
-  value       = google_container_cluster.api.name
-}
-
-output "redis_host" {
-  description = "IP privada de Memorystore Redis"
-  value       = google_redis_instance.cache.host
-}
-
 output "cloudsql_conexion" {
   description = "Nombre de conexión de Cloud SQL para el proxy"
   value       = google_sql_database_instance.api.connection_name
@@ -26,4 +11,14 @@ output "repositorio_imagenes" {
 output "secreto_db" {
   description = "ID del secreto de Secret Manager con la contraseña de la base de datos"
   value       = google_secret_manager_secret.db_password.secret_id
+}
+
+output "cuenta_cloud_run" {
+  description = "Cuenta de servicio con la que corre el API en Cloud Run"
+  value       = google_service_account.api.email
+}
+
+output "secreto_database_url" {
+  description = "ID del secreto con la DATABASE_URL que lee Cloud Run"
+  value       = google_secret_manager_secret.db_url.secret_id
 }
