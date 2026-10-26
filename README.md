@@ -230,14 +230,14 @@ flowchart TB
 ```
 
 **StatsNostra en GCP:**
-- Despliegue: GKE, 2 nodos, 2-4 réplicas, `HorizontalPodAutoscaler` (2-4, 70% CPU) — **escalamiento probado con carga real** contra el LoadBalancer (2→4 réplicas, evidencia en eventos de Kubernetes), probes de liveness/readiness, `requests`/`limits`, `ConfigMap` + `Secret` (ver [`k8s/`](k8s/)).
+- Despliegue (v2 y v3, en GKE): 2 nodos, 2-4 réplicas, `HorizontalPodAutoscaler` (2-4, 70% CPU) — **escalamiento probado con carga real** contra el LoadBalancer (2→4 réplicas, evidencia en eventos de Kubernetes), probes de liveness/readiness, `requests`/`limits`, `ConfigMap` + `Secret`. Los manifiestos están en el tag [`v3.0.0`](https://github.com/MarianaPineda0/StatsNostra/tree/v3.0.0/k8s); en la v4 el API corre en Cloud Run.
 - `api/v1` y `api/v2`: CRUD completo para Apostador, Partido y Predicción. El `GetById` de `v2` agrega un `Trade` de trading-journal y un `Comercio` de ecommerce, en tiempo real, consumiendo el **`api/v2`** de cada compañero (contratos versionados), GET RANDOM, sin datos quemados.
 - Versión y track: toda respuesta (también los errores y los 404) lleva `X-App-Version` y `X-Track` (`stable` o `canary`), y `/health` los repite en el cuerpo. Se configuran con las variables `APP_VERSION` y `TRACK`. Así se ve en vivo qué revisión atendió cada petición cuando conviven dos versiones.
 - Trace-id: header `X-Trace-Id` (UUID), propagado en toda llamada saliente — confirmado end-to-end con trading-journal y con el orquestador.
 - Caché Distribuida: Memorystore (Redis), TTL 30s sobre las respuestas de trading-journal y ecommerce, más **invalidación explícita** vía `DELETE /api/v2/cache/{entidad}` (fuera del TTL).
 - Datos de ejemplo: la BD de Cloud SQL tiene 3 apostadores, 5 partidos y 14 predicciones (uno de los partidos ya finalizado, con sus predicciones evaluadas). Se cargaron por la propia API (`POST`), no están en el código; así, cuando otra API pide una entidad de esta al azar (GET RANDOM) recibe datos y no `null`.
 - Observabilidad: ver sección dedicada abajo.
-- Pipeline (v3): GitHub Actions → Terraform (`apply`) → Buildpacks (sin Dockerfile) → Artifact Registry → GKE, lanzado a mano ([`.github/workflows/terraform-v3-despliegue.yml`](.github/workflows/terraform-v3-despliegue.yml)); se destruye con [`terraform-v3-destruir.yml`](.github/workflows/terraform-v3-destruir.yml).
+- Pipeline (v4): GitHub Actions → imágenes por digest → Cloud Run con división de tráfico por etapas y puerta de calidad ([`.github/workflows/`](.github/workflows/), umbrales en [`canary/slo.yaml`](canary/slo.yaml)).
 
 ### 📊 Observabilidad
 
@@ -358,11 +358,13 @@ Consultas de ejemplo:
 
 ### 🎬 Demostración en vivo
 
-Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue o con `terraform output ip_api`).
+> ℹ️ Esta demostración es la de la v2, que corría en GKE. Para la v4 la
+> demostración es la del Canary Deployment (acceso al 0 %, reparto real de
+> tráfico, comparación de métricas, promoción y aborto), descrita en la sección
+> *Canary Deployment (v4)*. Las APIs de los compañeros y Grafana Cloud no se
+> configuran en las versiones 3 y 4: `Trade` y `Comercio` salen en `null`.
 
-> ℹ️ Esta demostración es la de la v2. En el despliegue v3 no se configuran las
-> APIs de los compañeros ni Grafana Cloud: `Trade` y `Comercio` salen en `null`
-> y los pasos 1 (paneles) y 4 no aplican. Los pasos 2 y 3 funcionan igual.
+Base: `https://statsnostra-api-599897195726.us-central1.run.app` (el servicio de Cloud Run de la v4).
 
 1. **Flujo entre nubes y trace-id.**
    `curl -H "X-Trace-Id: demo-001" http://<IP_API>/api/v2/apostadores/7`
@@ -385,18 +387,18 @@ Base: `http://<IP_API>` (la IP aparece en el resumen del workflow de despliegue 
    (`sum(increase(http_server_duration_milliseconds_count{service_name="api-gcp", http_status_code=~"5.."}[5m]))`).
    La alerta nativa de Cloud Monitoring se dispara con 5xx reales.
 
-### Servicios de GCP usados (v3)
+### Servicios de GCP usados (v4)
 
 | Servicio | Creado con | Para qué |
 |---|---|---|
-| **Google Kubernetes Engine (GKE)** | `gke.tf` | Clúster zonal de 2 nodos `e2-medium`; corre el API con `Deployment`, `Service` y `HorizontalPodAutoscaler` |
-| **Cloud SQL (PostgreSQL 16)** | `cloudsql.tf` | Base de datos `statsnostra_v3`, a la que el API llega por el Cloud SQL Auth Proxy |
-| **Memorystore (Redis 7)** | `redis.tf` | Caché del API, en la misma red que el clúster |
-| **Artifact Registry** | `artifact_registry.tf` | Almacena la imagen del API construida con Buildpacks |
-| **Secret Manager** | `secretos.tf` | Guarda la contraseña de la base de datos; el pipeline la lee para crear el `Secret` de Kubernetes |
-| **IP externa estática** | `ip.tf` | Dirección fija del `LoadBalancer` |
+| **Cloud Run** | workflows `canary-v4-*` | Sirve la revisión estable y la canary, y divide el tráfico entre ellas |
+| **Cloud SQL (PostgreSQL 16)** | `cloudsql.tf` | Base de datos `statsnostra_v4`, compartida por las dos revisiones; Cloud Run entra por el socket de Cloud SQL |
+| **Artifact Registry** | `artifact_registry.tf` | Imágenes del API, que se despliegan por digest |
+| **Secret Manager** | `secretos.tf` | Contraseña de la base y la `DATABASE_URL` que lee Cloud Run |
+| **Cloud Monitoring y Logging** | `dashboard.tf`, `alertas.tf`, `monitoreo.tf` | Métricas por revisión, dashboard lado a lado, alertas y la métrica de negocio sacada de los logs |
+| **IAM** | `cuentas.tf` | Cuenta de servicio de Cloud Run, solo con permiso para Cloud SQL |
 | **Cloud Storage** | a mano (una vez) | Bucket con el estado remoto de Terraform, versionado y sin acceso público |
-| **IAM + Workload Identity Federation** | a mano (una vez) | Los workflows de GitHub Actions se autentican sin llaves de servicio |
+| **Workload Identity Federation** | a mano (una vez) | Los workflows de GitHub Actions se autentican sin llaves de servicio |
 
 > ⏱️ Los servicios gratuitos de Render "duermen" tras 15 min de
 > inactividad — la primera petición puede tardar ~50 s en responder
@@ -657,23 +659,23 @@ propias). Detalle completo en
 
 ## 🚀 CI/CD
 
-Cuatro pipelines en GitHub Actions:
+Cinco pipelines en GitHub Actions:
 
 | Pipeline | Cuándo corre | Qué hace |
 |---|---|---|
 | ⚙️ `pruebas.yml` | push a `develop` | Pruebas + lint → despliegue a Render |
 | ⚙️ `produccion.yml` | push a `main` | Pruebas + lint → despliegue a Render |
-| 🏗️ `terraform-v3-despliegue.yml` | manual | `terraform apply` → build con Buildpacks → Artifact Registry → manifiestos en GKE → migraciones → prueba de humo |
-| 💥 `terraform-v3-destruir.yml` | manual, pide escribir `DESTRUIR` | Borra el `Service` de k8s, `terraform destroy` y revisa que no queden recursos |
+| 🐤 `canary-v4-desplegar.yml` | manual | Construye las imágenes por digest → migra la base (estable y luego Expand) → despliega el canary sin tráfico público → prueba de humo |
+| 🚦 `canary-v4-promover.yml` | manual | Sube el tráfico a 10 %, 50 % y 100 % con horneado y puerta de calidad; aborta solo si falla. Con `falla-errores` o `falla-latencia` simula una regresión |
+| ⏪ `canary-v4-revertir.yml` | manual | Rollback inmediato: 0 % canary, 100 % estable |
 
-Los dos pipelines de Terraform se autentican sin llaves (Workload Identity
-Federation). El de despliegue construye la imagen con `pack` directo en el
-runner, lee la contraseña de la base desde Secret Manager, reemplaza las
-variables de `k8s/` con `envsubst` (IP, host de Redis, imagen y conexión de
-Cloud SQL) y corre las migraciones de Alembic a través del Cloud SQL Proxy.
-Son manuales porque cada ejecución crea GKE, Cloud SQL y Redis, que consumen
-crédito. Ver [`terraform/README.md`](terraform/README.md) y, para los
-pipelines de Render, [`docs/ci-cd.md`](docs/ci-cd.md).
+Los pipelines del canary se autentican sin llaves (Workload Identity Federation).
+Las migraciones corren como trabajos de Cloud Run con la misma imagen y la
+cuenta del servicio, y el despliegue usa el digest de la imagen, no una
+etiqueta. Son manuales para que ningún push cambie el tráfico de producción
+por accidente. Ver [`canary/`](canary/) para los umbrales y la puerta de
+calidad, [`terraform/README.md`](terraform/README.md) para la infraestructura y,
+para los pipelines de Render, [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ## ☁️ Ambientes (Render)
 
@@ -696,4 +698,4 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 - 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)
 - ☁️ [`docs/render.md`](docs/render.md)
 - 🧪 [`docs/pruebas.md`](docs/pruebas.md)
-- ☸️ [`k8s/`](k8s/) — manifiestos de GKE
+- 🐤 [`canary/`](canary/) — umbrales SLO, puerta de calidad, promoción por etapas y generador de carga
