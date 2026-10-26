@@ -12,13 +12,16 @@ Uso:
 """
 
 import argparse
+import json
 import math
 import random
 import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 
 # Rutas de lectura comunes a las dos versiones: asi el reparto del trafico no
 # depende de que una de las dos tenga rutas que la otra no conoce
@@ -51,22 +54,89 @@ def _cota_superior(errores: int, total: int) -> float:
     return (centro + margen) / (1 + z * z / total)
 
 
-def _una_peticion(url: str, cabeceras: dict) -> tuple[str, str, int, float]:
+def _pedir(
+    url: str, cabeceras: dict, metodo: str = "GET", cuerpo: dict | None = None
+) -> tuple[str, str, int, float, dict]:
     inicio = time.perf_counter()
+    datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
+    cabeceras = {**cabeceras, "Content-Type": "application/json"} if datos else cabeceras
+    peticion = urllib.request.Request(url, data=datos, headers=cabeceras, method=metodo)
     try:
-        with urllib.request.urlopen(
-            urllib.request.Request(url, headers=cabeceras), timeout=30
-        ) as respuesta:
-            codigo, headers = respuesta.status, respuesta.headers
+        with urllib.request.urlopen(peticion, timeout=30) as respuesta:
+            codigo, headers, contenido = respuesta.status, respuesta.headers, respuesta.read()
     except urllib.error.HTTPError as error:
-        codigo, headers = error.code, error.headers
+        codigo, headers, contenido = error.code, error.headers, b""
     except (urllib.error.URLError, TimeoutError):
-        return "sin-respuesta", "-", 0, (time.perf_counter() - inicio) * 1000
+        return "sin-respuesta", "-", 0, (time.perf_counter() - inicio) * 1000, {}
+    try:
+        respuesta_json = json.loads(contenido) if contenido else {}
+    except ValueError:
+        respuesta_json = {}
     return (
         headers.get("X-Track", "sin-track"),
         headers.get("X-App-Version", "-"),
         codigo,
         (time.perf_counter() - inicio) * 1000,
+        respuesta_json,
+    )
+
+
+def _una_peticion(url: str, cabeceras: dict) -> tuple[str, str, int, float]:
+    return _pedir(url, cabeceras)[:4]
+
+
+def _ciclo_negocio(base: str, cabeceras: dict, registrar) -> None:
+    """Crea un partido con dos predicciones y lo finaliza.
+
+    Una prediccion acierta el marcador y la otra no, y las dos se evaluan en la
+    misma peticion de finalizar: la revision que la atiende siempre registra
+    50 % de aciertos. Asi la metrica de negocio no depende del azar y una
+    regresion en el calculo de puntos del canary si se nota.
+    """
+    sufijo = uuid.uuid4().hex[:12]
+
+    def llamar(ruta: str, cuerpo: dict) -> dict | None:
+        track, version, codigo, ms, datos = _pedir(base + ruta, cabeceras, "POST", cuerpo)
+        registrar(track, version, codigo, ms)
+        return datos if codigo < 300 else None
+
+    apostadores = [
+        llamar(
+            "/api/v1/apostadores",
+            {
+                "nombre": f"Carga {indice}",
+                "username": f"carga_{sufijo}_{indice}",
+                "email": f"carga.{sufijo}.{indice}@example.com",
+            },
+        )
+        for indice in (1, 2)
+    ]
+    partido = llamar(
+        "/api/v1/partidos",
+        {
+            "deporte": "Futbol",
+            "liga": "Liga BetPlay",
+            "equipo_local": f"Local {sufijo}",
+            "equipo_visitante": f"Visitante {sufijo}",
+            "fecha_hora": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+        },
+    )
+    if partido is None or not all(apostadores):
+        return
+    # El resultado sera 2-1: el primer apostador acierta y el segundo no
+    for apostador, (local, visitante) in zip(apostadores, [(2, 1), (0, 3)], strict=True):
+        llamar(
+            "/api/v1/predicciones",
+            {
+                "apostador_id": apostador["id"],
+                "partido_id": partido["id"],
+                "goles_local_pred": local,
+                "goles_visitante_pred": visitante,
+            },
+        )
+    llamar(
+        f"/api/v1/partidos/{partido['id']}/finalizar",
+        {"resultado_local": 2, "resultado_visitante": 1},
     )
 
 
@@ -80,22 +150,34 @@ def cabeceras_de(fault: str = "", extra: list[str] | None = None) -> dict:
     return cabeceras
 
 
-def generar(url: str, duracion: int, hilos: int, cabeceras: dict) -> dict[str, list]:
+def generar(
+    url: str, duracion: int, hilos: int, cabeceras: dict, hilos_negocio: int = 0
+) -> dict[str, list]:
     """Manda carga durante `duracion` segundos. Devuelve, por cada track que
-    respondio, la lista de (codigo, milisegundos)."""
+    respondio, la lista de (codigo, milisegundos).
+
+    Ademas de las lecturas, `hilos_negocio` hilos finalizan partidos con
+    predicciones para que la metrica de negocio tenga datos en las dos revisiones.
+    """
     resultados: dict[str, list] = defaultdict(list)
     cerrojo = threading.Lock()
     fin = time.monotonic() + duracion
+    base = url.rstrip("/")
+
+    def registrar(track: str, version: str, codigo: int, ms: float) -> None:
+        with cerrojo:
+            resultados[f"{track} {version}"].append((codigo, ms))
 
     def trabajar() -> None:
         while time.monotonic() < fin:
-            track, version, codigo, ms = _una_peticion(
-                url.rstrip("/") + random.choice(RUTAS), cabeceras
-            )
-            with cerrojo:
-                resultados[f"{track} {version}"].append((codigo, ms))
+            registrar(*_una_peticion(base + random.choice(RUTAS), cabeceras))
+
+    def trabajar_negocio() -> None:
+        while time.monotonic() < fin:
+            _ciclo_negocio(base, cabeceras, registrar)
 
     ejecutores = [threading.Thread(target=trabajar) for _ in range(hilos)]
+    ejecutores += [threading.Thread(target=trabajar_negocio) for _ in range(hilos_negocio)]
     for ejecutor in ejecutores:
         ejecutor.start()
     for ejecutor in ejecutores:
@@ -127,11 +209,18 @@ def main() -> None:
     parser.add_argument("--hilos", type=int, default=10, help="peticiones en paralelo")
     parser.add_argument("--fault", default="", help='valor de X-Fault, ej. "error=0.5"')
     parser.add_argument("--cabecera", action="append", default=[], help='ej. "x-canary: true"')
+    parser.add_argument(
+        "--hilos-negocio",
+        type=int,
+        default=0,
+        help="hilos que finalizan partidos con predicciones",
+    )
     args = parser.parse_args()
 
     resultados = generar(
-        args.url, args.duracion, args.hilos, cabeceras_de(args.fault, args.cabecera)
-    )
+        args.url, args.duracion, args.hilos, cabeceras_de(args.fault, args.cabecera),
+        args.hilos_negocio,
+    )  # fmt: skip
     imprimir(resultados, args.duracion, args.hilos)
 
 
