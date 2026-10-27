@@ -86,58 +86,74 @@ def _una_peticion(url: str, cabeceras: dict) -> tuple[str, str, int, float]:
 
 
 def _ciclo_negocio(base: str, cabeceras: dict, registrar) -> None:
-    """Crea un partido con dos predicciones y lo finaliza.
+    """Crea un partido con dos predicciones, lo finaliza y borra lo creado.
 
     Una prediccion acierta el marcador y la otra no, y las dos se evaluan en la
     misma peticion de finalizar: la revision que la atiende siempre registra
     50 % de aciertos. Asi la metrica de negocio no depende del azar y una
     regresion en el calculo de puntos del canary si se nota.
+
+    Al final se borra todo: las listas del API devuelven todas las filas, y si
+    la carga las dejara crecer la latencia de cada corrida seria peor que la de
+    la anterior y la comparacion entre revisiones dejaria de ser justa.
     """
     sufijo = uuid.uuid4().hex[:12]
+    creados: list[str] = []  # rutas de lo creado, en orden de creacion
 
-    def llamar(ruta: str, cuerpo: dict) -> dict | None:
-        track, version, codigo, ms, datos = _pedir(base + ruta, cabeceras, "POST", cuerpo)
+    def llamar(ruta: str, cuerpo: dict | None = None, metodo: str = "POST") -> dict | None:
+        track, version, codigo, ms, datos = _pedir(base + ruta, cabeceras, metodo, cuerpo)
         registrar(track, version, codigo, ms)
         return datos if codigo < 300 else None
 
-    apostadores = [
-        llamar(
-            "/api/v1/apostadores",
+    def crear(ruta: str, cuerpo: dict) -> dict | None:
+        datos = llamar(ruta, cuerpo)
+        if datos is not None:
+            creados.append(f"{ruta}/{datos['id']}")
+        return datos
+
+    try:
+        apostadores = [
+            crear(
+                "/api/v1/apostadores",
+                {
+                    "nombre": f"Carga {indice}",
+                    "username": f"carga_{sufijo}_{indice}",
+                    "email": f"carga.{sufijo}.{indice}@example.com",
+                },
+            )
+            for indice in (1, 2)
+        ]
+        partido = crear(
+            "/api/v1/partidos",
             {
-                "nombre": f"Carga {indice}",
-                "username": f"carga_{sufijo}_{indice}",
-                "email": f"carga.{sufijo}.{indice}@example.com",
+                "deporte": "Futbol",
+                "liga": "Liga BetPlay",
+                "equipo_local": f"Local {sufijo}",
+                "equipo_visitante": f"Visitante {sufijo}",
+                "fecha_hora": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
             },
         )
-        for indice in (1, 2)
-    ]
-    partido = llamar(
-        "/api/v1/partidos",
-        {
-            "deporte": "Futbol",
-            "liga": "Liga BetPlay",
-            "equipo_local": f"Local {sufijo}",
-            "equipo_visitante": f"Visitante {sufijo}",
-            "fecha_hora": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
-        },
-    )
-    if partido is None or not all(apostadores):
-        return
-    # El resultado sera 2-1: el primer apostador acierta y el segundo no
-    for apostador, (local, visitante) in zip(apostadores, [(2, 1), (0, 3)], strict=True):
+        if partido is None or not all(apostadores):
+            return
+        # El resultado sera 2-1: el primer apostador acierta y el segundo no
+        for apostador, (local, visitante) in zip(apostadores, [(2, 1), (0, 3)], strict=True):
+            crear(
+                "/api/v1/predicciones",
+                {
+                    "apostador_id": apostador["id"],
+                    "partido_id": partido["id"],
+                    "goles_local_pred": local,
+                    "goles_visitante_pred": visitante,
+                },
+            )
         llamar(
-            "/api/v1/predicciones",
-            {
-                "apostador_id": apostador["id"],
-                "partido_id": partido["id"],
-                "goles_local_pred": local,
-                "goles_visitante_pred": visitante,
-            },
+            f"/api/v1/partidos/{partido['id']}/finalizar",
+            {"resultado_local": 2, "resultado_visitante": 1},
         )
-    llamar(
-        f"/api/v1/partidos/{partido['id']}/finalizar",
-        {"resultado_local": 2, "resultado_visitante": 1},
-    )
+    finally:
+        # Primero las predicciones, que dependen del partido y de los apostadores
+        for ruta in sorted(creados, key=lambda r: "/predicciones/" not in r):
+            llamar(ruta, metodo="DELETE")
 
 
 def cabeceras_de(fault: str = "", extra: list[str] | None = None) -> dict:
