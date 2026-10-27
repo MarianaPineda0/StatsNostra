@@ -1,5 +1,5 @@
-# El ciclo de negocio de la carga: debe dejar un partido finalizado con dos
-# predicciones, una acertada y otra no, sin tocar la red.
+# El ciclo de negocio de la carga: finaliza un partido con dos predicciones, una
+# acertada y otra no, y borra todo lo que creo; sin tocar la red.
 from canary import carga
 
 
@@ -18,7 +18,7 @@ def test_ciclo_de_negocio_finaliza_un_partido_con_una_prediccion_acertada(monkey
     assert rutas[:3] == ["/apostadores", "/apostadores", "/partidos"]
     assert rutas[3:5] == ["/predicciones", "/predicciones"]
     assert rutas[5] == "/partidos/3/finalizar"
-    assert len(registros) == 6  # cada peticion cuenta para el reparto por track
+    assert len(registros) == 11  # cada peticion cuenta para el reparto por track
 
     resultado = llamadas[5][2]
     marcadores = [
@@ -52,3 +52,40 @@ def test_con_tasa_fija_la_carga_no_supera_el_ritmo_pedido(monkeypatch):
     resultados = carga.generar("https://servicio", 2, 4, {}, tasa=10)
     total = sum(len(v) for v in resultados.values())
     assert 14 <= total <= 22  # 10 por segundo durante 2 s, con margen de arranque
+
+
+def test_el_ciclo_borra_lo_que_crea_empezando_por_las_predicciones(monkeypatch):
+    llamadas = []
+
+    def falso(url, cabeceras, metodo="GET", cuerpo=None):
+        llamadas.append((metodo, url.split("/api/v1")[1]))
+        return "canary", "4.0.0", 201, 12.0, {"id": len(llamadas)}
+
+    monkeypatch.setattr(carga, "_pedir", falso)
+    carga._ciclo_negocio("https://servicio", {}, lambda *datos: None)
+
+    borrados = [ruta for metodo, ruta in llamadas if metodo == "DELETE"]
+    assert sorted(borrados) == sorted(
+        [
+            "/apostadores/1",
+            "/apostadores/2",
+            "/partidos/3",
+            "/predicciones/4",
+            "/predicciones/5",
+        ]
+    )
+    assert all("/predicciones/" in r for r in borrados[:2])
+
+
+def test_si_el_ciclo_se_corta_igual_borra_lo_ya_creado(monkeypatch):
+    llamadas = []
+
+    def falso(url, cabeceras, metodo="GET", cuerpo=None):
+        llamadas.append((metodo, url.split("/api/v1")[1]))
+        if url.endswith("/partidos"):
+            return "canary", "4.0.0", 500, 5.0, {}
+        return "canary", "4.0.0", 201, 5.0, {"id": len(llamadas)}
+
+    monkeypatch.setattr(carga, "_pedir", falso)
+    carga._ciclo_negocio("https://servicio", {}, lambda *datos: None)
+    assert [m for m, _ in llamadas].count("DELETE") == 2  # los dos apostadores
