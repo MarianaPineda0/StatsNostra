@@ -122,7 +122,13 @@ def _entorno_real(args) -> Entorno:
 
     def generar_carga(segundos: int) -> None:
         resultados = carga.generar(
-            args.url, segundos, args.hilos, cabeceras, args.hilos_negocio
+            args.url,
+            segundos,
+            args.hilos,
+            cabeceras,
+            args.hilos_negocio,
+            args.tasa,
+            args.ciclo_cada,
         )
         carga.imprimir(resultados, segundos, args.hilos)
 
@@ -144,9 +150,13 @@ def main() -> int:
     parser.add_argument("--etapas", default="10,50,100", help="porcentajes separados por coma")
     parser.add_argument("--bake", type=int, default=3, help="minutos de horneado por etapa")
     parser.add_argument("--espera-metricas", type=int, default=90, help="segundos")
-    parser.add_argument("--hilos", type=int, default=14)
+    parser.add_argument("--hilos", type=int, default=12)
+    parser.add_argument("--tasa", type=float, default=6, help="lecturas por segundo en total")
     parser.add_argument(
-        "--hilos-negocio", type=int, default=4, help="ciclos de partidos en paralelo"
+        "--ciclo-cada", type=float, default=1.0, help="segundos entre ciclos de negocio"
+    )
+    parser.add_argument(
+        "--hilos-negocio", type=int, default=1, help="ciclos de partidos en paralelo"
     )
     parser.add_argument("--fault", default="", help='simula una regresion, ej. "error=0.5"')
     parser.add_argument("--proyecto", default="project-3f57bb8c-371e-4b9c-949")
