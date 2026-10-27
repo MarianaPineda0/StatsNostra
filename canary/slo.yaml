@@ -26,15 +26,15 @@ muestra_minima:
 
 promover:
   tasa_error_5xx_max: 0.01      # hasta 1 % de respuestas 5xx
-  latencia_p95_ms_max: 800
-  latencia_p99_ms_max: 1500
+  # Medidos en el servidor sobre la linea base: la estable sola llega a p95 de
+  # 1000-2700 ms y p99 de 1500-5600 ms bajo carga, asi que un limite menor
+  # rechazaria a la propia estable. Quedan fijados antes de la validacion final
+  latencia_p95_ms_max: 1500
+  latencia_p99_ms_max: 3000
   # Contra la estable en la misma ventana, para separar el efecto del codigo
   # nuevo de un mal momento de la plataforma (arranque en frio, red)
   error_extra_max: 0.005        # puntos de error por encima de la estable
-  # Medido con carga real: el canary sano llega a 1,9 veces el p95 de la estable
-  # porque atiende pocas peticiones con pocas instancias; 2,5 deja margen sin
-  # esconder una regresion (el aborto sigue en 3 veces y 2000 ms)
-  p95_vs_estable_max: 2.5       # veces la latencia p95 de la estable
+  p95_vs_estable_max: 1.5       # veces la latencia p95 de la estable
   # La relacion solo cuenta si ademas la diferencia absoluta es relevante: 110 ms
   # contra 29 ms es casi 4 veces pero no es una regresion que alguien note
   p95_diferencia_min_ms: 150
