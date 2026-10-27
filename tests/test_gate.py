@@ -160,13 +160,12 @@ def test_con_pocas_evaluaciones_la_metrica_de_negocio_no_decide():
     assert decision == PROMOVER
 
 
-def test_canary_algo_mas_lento_que_la_estable_pero_sano_se_promueve():
-    # Caso medido con carga real: 775 ms contra 400 ms (1,9 veces), con 0 errores
-    decision, _ = decidir(SLO, _sana(p95_ms=775, p99_ms=1100), _sana(p95_ms=400, p99_ms=500))
+def test_canary_hasta_una_vez_y_media_la_estable_se_promueve():
+    decision, _ = decidir(SLO, _sana(p95_ms=600, p99_ms=900), _sana(p95_ms=420, p99_ms=600))
     assert decision == PROMOVER
 
 
-def test_canary_mas_de_dos_veces_y_media_la_estable_no_se_promueve():
+def test_canary_mas_de_una_vez_y_media_la_estable_pausa():
     decision, razones = decidir(SLO, _sana(p95_ms=700, p99_ms=1100), _sana(p95_ms=250))
     assert decision == PAUSAR
     assert any("relativo" in r for r in razones)

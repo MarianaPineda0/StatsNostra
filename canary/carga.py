@@ -151,30 +151,50 @@ def cabeceras_de(fault: str = "", extra: list[str] | None = None) -> dict:
 
 
 def generar(
-    url: str, duracion: int, hilos: int, cabeceras: dict, hilos_negocio: int = 0
+    url: str,
+    duracion: int,
+    hilos: int,
+    cabeceras: dict,
+    hilos_negocio: int = 0,
+    tasa: float = 0,
+    ciclo_cada: float = 0,
 ) -> dict[str, list]:
     """Manda carga durante `duracion` segundos. Devuelve, por cada track que
     respondio, la lista de (codigo, milisegundos).
 
-    Ademas de las lecturas, `hilos_negocio` hilos finalizan partidos con
-    predicciones para que la metrica de negocio tenga datos en las dos revisiones.
+    Con `tasa` (peticiones por segundo, en total) la carga es de ritmo fijo: no
+    depende de lo rapido que responda el servicio. Sin ella cada hilo manda lo
+    mas rapido que puede y, si el servicio tarda, satura la linea base y falsea
+    la comparacion. Los `hilos_negocio` finalizan partidos con predicciones
+    (un ciclo cada `ciclo_cada` segundos) para que la metrica de negocio tenga
+    datos en las dos revisiones.
     """
     resultados: dict[str, list] = defaultdict(list)
     cerrojo = threading.Lock()
     fin = time.monotonic() + duracion
     base = url.rstrip("/")
+    intervalo = hilos / tasa if tasa else 0
 
     def registrar(track: str, version: str, codigo: int, ms: float) -> None:
         with cerrojo:
             resultados[f"{track} {version}"].append((codigo, ms))
 
+    def esperar(inicio: float, cada: float) -> None:
+        resto = cada - (time.monotonic() - inicio)
+        if resto > 0:
+            time.sleep(resto)
+
     def trabajar() -> None:
         while time.monotonic() < fin:
+            inicio = time.monotonic()
             registrar(*_una_peticion(base + random.choice(RUTAS), cabeceras))
+            esperar(inicio, intervalo)
 
     def trabajar_negocio() -> None:
         while time.monotonic() < fin:
+            inicio = time.monotonic()
             _ciclo_negocio(base, cabeceras, registrar)
+            esperar(inicio, ciclo_cada)
 
     ejecutores = [threading.Thread(target=trabajar) for _ in range(hilos)]
     ejecutores += [threading.Thread(target=trabajar_negocio) for _ in range(hilos_negocio)]
@@ -210,6 +230,9 @@ def main() -> None:
     parser.add_argument("--fault", default="", help='valor de X-Fault, ej. "error=0.5"')
     parser.add_argument("--cabecera", action="append", default=[], help='ej. "x-canary: true"')
     parser.add_argument(
+        "--tasa", type=float, default=0, help="peticiones por segundo en total"
+    )
+    parser.add_argument(
         "--hilos-negocio",
         type=int,
         default=0,
@@ -219,7 +242,7 @@ def main() -> None:
 
     resultados = generar(
         args.url, args.duracion, args.hilos, cabeceras_de(args.fault, args.cabecera),
-        args.hilos_negocio,
+        args.hilos_negocio, args.tasa,
     )  # fmt: skip
     imprimir(resultados, args.duracion, args.hilos)
 

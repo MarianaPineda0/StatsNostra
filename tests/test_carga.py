@@ -42,3 +42,13 @@ def test_si_falla_un_paso_el_ciclo_se_detiene(monkeypatch):
     monkeypatch.setattr(carga, "_pedir", falso)
     carga._ciclo_negocio("https://servicio", {}, lambda *datos: None)
     assert len(llamadas) == 3  # apostadores y partido; sin ids no hay predicciones
+
+
+def test_con_tasa_fija_la_carga_no_supera_el_ritmo_pedido(monkeypatch):
+    # Aunque el servicio responda al instante, la tasa limita las peticiones
+    monkeypatch.setattr(
+        carga, "_una_peticion", lambda url, cabeceras: ("stable", "3.0.0", 200, 1.0)
+    )
+    resultados = carga.generar("https://servicio", 2, 4, {}, tasa=10)
+    total = sum(len(v) for v in resultados.values())
+    assert 14 <= total <= 22  # 10 por segundo durante 2 s, con margen de arranque

@@ -15,11 +15,11 @@ on:
           - falla-latencia
       etapas:
         description: "Porcentajes de trafico al canary, separados por coma"
-        default: "10,50,100"
+        default: "10,25,50,100"
         required: true
       bake:
         description: "Minutos de horneado (bake time) por etapa"
-        default: "3"
+        default: "4"
         required: true
 
 permissions:
