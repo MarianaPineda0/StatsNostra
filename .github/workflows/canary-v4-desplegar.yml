@@ -144,6 +144,9 @@ jobs:
             --command=alembic --args="upgrade,head" --max-retries=0 --task-timeout=300
           gcloud run jobs execute statsnostra-migrar --region=$REGION --wait
 
+      # Tres instancias calientes desde el inicio, igual que la estable bajo carga:
+      # con una sola, el canary pagaba el arranque en frio y la variacion de una
+      # unica instancia, y la comparacion de latencia no era justa.
       # --no-traffic: la revision queda desplegada pero el publico no la ve.
       # Solo se llega a ella por su URL de revision (etapa 0).
       - name: Revisión canary sin tráfico
@@ -160,7 +163,7 @@ jobs:
             --service-account=$CUENTA_API --add-cloudsql-instances=$CONEXION_SQL \
             --set-secrets=DATABASE_URL=statsnostra-v4-database-url:latest \
             --set-env-vars="APP_VERSION=$VERSION,TRACK=canary,FAULT_INJECTION=true" --port=8000 \
-            --allow-unauthenticated --min-instances=0 --max-instances=3 --cpu=1 --memory=512Mi \
+            --allow-unauthenticated --min-instances=3 --max-instances=6 --cpu=1 --memory=512Mi \
             --revision-suffix="$REVISION" --tag=canary --no-traffic
           echo "revision=$SERVICIO-$REVISION" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"

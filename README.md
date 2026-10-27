@@ -136,9 +136,10 @@ pruebas de la `v3.0.0` contra la base ya expandida.
 | Etapa | Tráfico al canary | Cómo se llega | Horneado | Qué decide |
 |---|---|---|---|---|
 | **0** | 0 % público | URL de revisión etiquetada del canary | prueba de humo | `/health` con `X-Track: canary`, `/api/v4` responde, el público sigue en la estable |
-| **1** | 10 % | workflow *Promover por etapas* | 3 min + 90 s de métricas | puerta de calidad |
-| **2** | 50 % | ídem | 3 min + 90 s | puerta de calidad |
-| **3** | 100 % | ídem | 3 min + 90 s | puerta de calidad |
+| **1** | 10 % | workflow *Promover por etapas* | 4 min + 90 s de métricas | puerta de calidad |
+| **2** | 25 % | ídem | 4 min + 90 s | puerta de calidad |
+| **3** | 50 % | ídem | 4 min + 90 s | puerta de calidad |
+| **4** | 100 % | ídem | 4 min + 90 s | puerta de calidad |
 
 Los tiempos son parámetros del workflow (`bake`, `--espera-metricas`). Los 90 s
 extra existen porque Cloud Monitoring tarda en publicar lo que acaba de pasar.
@@ -156,11 +157,13 @@ aplica [`canary/gate.py`](canary/gate.py):
 | Resultado | Condición |
 |---|---|
 | **Pausar** | Menos de 100 peticiones en el canary (sin muestra suficiente), una tasa de aciertos que cae más de 15 puntos frente a la estable, o un umbral de promoción incumplido sin llegar al de aborto; se reevalúa hasta 3 veces |
-| **Promover** | 5xx ≤ 1 %, p95 ≤ 800 ms, p99 ≤ 1500 ms, no más de 0,5 puntos de error ni 2,5 veces el p95 de la estable, tasa de aciertos sin caer más de 15 puntos frente a la estable, CPU ≤ 80 % y memoria ≤ 85 % |
+| **Promover** | 5xx ≤ 1 %, p95 ≤ 1500 ms, p99 ≤ 3000 ms, no más de 0,5 puntos de error ni 1,5 veces el p95 de la estable, tasa de aciertos sin caer más de 15 puntos frente a la estable, CPU ≤ 80 % y memoria ≤ 85 % |
 | **Abortar** | 5xx > 5 %, p95 > 2000 ms, p95 más de 3 veces el de la estable o tasa de aciertos 30 puntos por debajo de la estable |
 
 Se compara el canary contra la estable en la misma ventana, para separar el
-efecto del código nuevo de un mal momento de la plataforma. Los primeros 90 s tras
+efecto del código nuevo de un mal momento de la plataforma. El canary se despliega con entre 3 y 6 instancias calientes, como la estable, para
+comparar latencias en igualdad de condiciones, y la carga es de tasa fija
+(unas 12 peticiones por segundo) para no saturar ninguna de las dos revisiones. Los primeros 90 s tras
 cada cambio de tráfico no cuentan: el canary arranca instancias en frío y esas
 respuestas lentas no reflejan el código. La tasa de aciertos
 solo cuenta con al menos 10 predicciones evaluadas en cada revisión.
@@ -192,7 +195,7 @@ Los tres workflows son manuales (*Actions → Run workflow*):
 | Workflow | Qué hace |
 |---|---|
 | `Canary v4 · Desplegar al 0 %` | Construye las imágenes por digest, migra la base con el Expand (la estable solo migra si el servicio aún no existe) y despliega el canary sin tráfico público |
-| `Canary v4 · Promover por etapas` | Sube el tráfico a 10 %, 50 % y 100 % con horneado y puerta de calidad. El escenario `falla-errores` o `falla-latencia` simula una regresión para ver el aborto |
+| `Canary v4 · Promover por etapas` | Sube el tráfico a 10 %, 25 %, 50 % y 100 % con horneado y puerta de calidad. El escenario `falla-errores` o `falla-latencia` simula una regresión para ver el aborto |
 | `Canary v4 · Revertir a la estable` | Rollback inmediato: 0 % canary, 100 % estable |
 
 Las migraciones corren como **trabajos de Cloud Run** con la misma imagen y la
@@ -672,7 +675,7 @@ Cinco pipelines en GitHub Actions:
 | ⚙️ `pruebas.yml` | push a `develop` | Pruebas + lint → despliegue a Render |
 | ⚙️ `produccion.yml` | push a `main` | Pruebas + lint → despliegue a Render |
 | 🐤 `canary-v4-desplegar.yml` | manual | Construye las imágenes por digest → migra la base (estable y luego Expand) → despliega el canary sin tráfico público → prueba de humo |
-| 🚦 `canary-v4-promover.yml` | manual | Sube el tráfico a 10 %, 50 % y 100 % con horneado y puerta de calidad; aborta solo si falla. Con `falla-errores` o `falla-latencia` simula una regresión |
+| 🚦 `canary-v4-promover.yml` | manual | Sube el tráfico a 10 %, 25 %, 50 % y 100 % con horneado y puerta de calidad; aborta solo si falla. Con `falla-errores` o `falla-latencia` simula una regresión |
 | ⏪ `canary-v4-revertir.yml` | manual | Rollback inmediato: 0 % canary, 100 % estable |
 
 Los pipelines del canary se autentican sin llaves (Workload Identity Federation).
