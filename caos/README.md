@@ -26,6 +26,35 @@ GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
   a un pod concreto por `kubectl port-forward`, porque el balanceador repartiría
   entre las dos réplicas y no se saturaría solo una.
 
+## Estado estable medido
+
+Antes de inyectar nada se mide cómo se comporta el flujo sano: tres corridas del
+perfil fijo, una tras otra, con los mismos recursos y sin ningún experimento activo.
+La evidencia está en `evidencia/estado-estable/` (resumen de k6 y hora de cada
+corrida, consumo de los pods y la instantánea del entorno).
+
+| Corrida | Peticiones | Éxito | p50 | p95 | p99 |
+|---|---|---|---|---|---|
+| 1 | 3.693 | 100 % | 418 ms | 1.208 ms | 1.714 ms |
+| 2 | 3.634 | 100 % | 450 ms | 1.200 ms | 1.594 ms |
+| 3 | 3.324 | 100 % | 450 ms | 1.479 ms | 1.934 ms |
+
+**Estado estable declarado:** éxito >= 99 % y p95 <= **1.511 ms** (mediana del p95,
+1.208 ms, más un 25 % de margen). Las tres corridas se hicieron con la imagen
+`1a39510`, 2 réplicas con requests de 100 m y límites de 250 m de CPU, sin HPA y
+con el interruptor de fallos apagado. Se comprobó en los logs que llegaron
+exactamente las peticiones de k6 y ninguna ajena.
+
+Un dato que condiciona todo lo demás: ya en estado estable cada pod llega a unos
+310 m de CPU con un límite de 250 m, es decir, el flujo sano ya trabaja limitado por
+CPU.
+
+Se repite con el mismo protocolo en las rondas 0 y 1:
+
+```bash
+P95_MAX_MS=1511 bash caos/carga/serie.sh caos/evidencia/CARPETA
+```
+
 ## Cómo se corre
 
 Desde la raíz del repositorio, con `kubectl` apuntando al clúster:

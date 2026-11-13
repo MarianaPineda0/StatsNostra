@@ -100,8 +100,9 @@
       "metrica_objetivo": "Latencia p95 del flujo y tasa de éxito, medidas con k6",
       "instrumento": "k6 (perfil fijo) y kubectl top; tablero de Cloud Monitoring",
       "ventana_de_observacion": "3 minutos de consumo más la recuperación",
-      "x_ms": null,
+      "x_ms": 1511,
       "x_se_fija_con": "mediana del p95 de 3 corridas de estado estable más un 25 %",
+      "estado_estable": "caos/evidencia/estado-estable/estado-estable.json",
       "radio_de_impacto": "un solo pod del API de Mari (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
       "duracion_minutos": 3,
       "condiciones_de_aborto": [
