@@ -7,6 +7,7 @@ from app.api.routes import (
     apostadores_v2,
     cache,
     consultas,
+    fallos,
     partidos,
     partidos_v2,
     predicciones,
@@ -70,6 +71,11 @@ app.include_router(apostadores_v2.router)
 app.include_router(partidos_v2.router)
 app.include_router(predicciones_v2.router)
 app.include_router(cache.router)
+
+# El endpoint de consumo de CPU solo existe con el interruptor de fallos
+# encendido: apagado, la ruta responde 404 como si no estuviera en el código
+if settings.fault_header_enabled:
+    app.include_router(fallos.router)
 
 # Metricas RED (tasa de peticiones, errores, latencia p50/p95) por ruta,
 # expuestas en /metrics para Prometheus/Grafana.
