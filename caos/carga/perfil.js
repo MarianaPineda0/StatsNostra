@@ -21,7 +21,8 @@ export const options = {
   },
   thresholds: {
     http_req_failed: ['rate<0.01'],
-    http_req_duration: ['p(95)<1500'],
+    // X del estado estable medido; sin la variable rige el valor de la plantilla
+    http_req_duration: [`p(95)<${__ENV.P95_MAX_MS || 1500}`],
   },
 };
 
