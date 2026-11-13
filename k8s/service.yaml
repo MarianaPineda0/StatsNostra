@@ -2,11 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: statsnostra-api-service
+  namespace: statsnostra
 spec:
   type: LoadBalancer
-  loadBalancerIP: "34.57.56.128"
+  # IP reservada con Terraform: la URL del API no cambia entre despliegues
+  loadBalancerIP: "${LB_IP}"
   selector:
     app: statsnostra-api
   ports:
     - port: 80
-      targetPort: 8080
+      targetPort: 8000
