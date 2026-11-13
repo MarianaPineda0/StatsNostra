@@ -1,0 +1,42 @@
+{
+  "corridas": 3,
+  "mediana": {
+    "exito": 1,
+    "p50_ms": 449.5,
+    "p95_ms": 1208.5,
+    "p99_ms": 1714.1,
+    "throughput_rps": 20.1
+  },
+  "margen": 0.25,
+  "x_ms": 1511,
+  "declaracion": "éxito >= 99 % y p95 <= 1511 ms (mediana de 3 corridas: éxito 100.00%, p95 1208 ms, más un 25% de margen)",
+  "detalle": [
+    {
+      "corrida": "1",
+      "peticiones": 3693,
+      "throughput_rps": 20.41,
+      "exito": 1,
+      "p50_ms": 417.5,
+      "p95_ms": 1208.5,
+      "p99_ms": 1714.1
+    },
+    {
+      "corrida": "2",
+      "peticiones": 3634,
+      "throughput_rps": 20.09,
+      "exito": 1,
+      "p50_ms": 449.5,
+      "p95_ms": 1200.4,
+      "p99_ms": 1594.2
+    },
+    {
+      "corrida": "3",
+      "peticiones": 3324,
+      "throughput_rps": 18.39,
+      "exito": 1,
+      "p50_ms": 449.7,
+      "p95_ms": 1479.1,
+      "p99_ms": 1934.4
+    }
+  ]
+}

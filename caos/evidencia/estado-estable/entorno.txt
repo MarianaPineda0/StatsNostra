@@ -1,0 +1,11 @@
+# instantánea 2026-11-13T23:04:51Z
+imagen=us-central1-docker.pkg.dev/project-3f57bb8c-371e-4b9c-949/statsnostra-v5-repo/statsnostra-api:1a39510
+réplicas=2/2
+requests={"cpu":"100m","memory":"128Mi"}
+limits={"cpu":"250m","memory":"256Mi"}
+FAULT_HEADER_ENABLED=false
+READINESS_LAG_MS=0
+APP_VERSION=5.0.0
+hpa=0
+statsnostra-api-66486b894f-4v7sn   2/2   Running   0     32m   10.20.0.22   gke-statsnostra-v5-gke-default-pool-12a44c5e-fz2h   <none>   <none>
+statsnostra-api-66486b894f-dcbdh   2/2   Running   0     32m   10.20.1.19   gke-statsnostra-v5-gke-default-pool-12a44c5e-tw25   <none>   <none>
