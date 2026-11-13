@@ -6,7 +6,8 @@
 # Uso: caos/carga/correr.sh CARPETA NUMERO
 #   CARPETA  donde se guarda la evidencia (p. ej. caos/evidencia/estado-estable)
 #   NUMERO   número de la corrida (1, 2, 3...)
-# Variables: BASE_URL, TRADE_ID, PERFIL (script de k6) y FORZAR=1 para saltar la guarda.
+# Variables: BASE_URL, TRADE_ID, PERFIL (script de k6), P95_MAX_MS (umbral de p95) y
+# FORZAR=1 para saltar la guarda.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -36,7 +37,7 @@ echo "Corrida $NUMERO contra $BASE_URL (trade $TRADE_ID), inicio $inicio"
 
 codigo=0
 MSYS_NO_PATHCONV=1 docker run --rm -i \
-  -e BASE_URL="$BASE_URL" -e TRADE_ID="$TRADE_ID" \
+  -e BASE_URL="$BASE_URL" -e TRADE_ID="$TRADE_ID" -e P95_MAX_MS="${P95_MAX_MS:-}" \
   -v "$destino:/salida" \
   grafana/k6 run \
   --summary-trend-stats="avg,min,med,max,p(90),p(95),p(99)" \
