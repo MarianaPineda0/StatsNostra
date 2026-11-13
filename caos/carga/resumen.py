@@ -71,8 +71,9 @@ def main() -> None:
     print(" ".join(f"{columna:>10}" for columna in columnas))
     for c in corridas:
         print(
-            f"{c['corrida']:>10} {c['peticiones']:>10} {c['exito']:>10.2%} {c['p50_ms']:>10.0f} "
-            f"{c['p95_ms']:>10.0f} {c['p99_ms']:>10.0f} {c['throughput_rps']:>10.1f}"
+            f"{c['corrida']:>10} {c['peticiones']:>10} {c['exito']:>10.2%} "
+            f"{c['p50_ms']:>10.0f} {c['p95_ms']:>10.0f} {c['p99_ms']:>10.0f} "
+            f"{c['throughput_rps']:>10.1f}"
         )
 
     resultado = declarar(corridas, args.margen)
