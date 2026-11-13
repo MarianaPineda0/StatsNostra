@@ -23,7 +23,7 @@ from app.core.middleware import (
 from app.core.tracing import configurar_tracing
 
 settings = get_settings()
-configurar_logging(settings.log_level)
+configurar_logging(settings.log_level, settings.app_id)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 configurar_tracing(
