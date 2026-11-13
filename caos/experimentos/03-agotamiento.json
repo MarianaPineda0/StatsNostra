@@ -1,11 +1,13 @@
 {
   "version": "1.0.0",
   "title": "Agotamiento de CPU de un pod del API de Mari en GKE",
-  "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= X ms. X es el p95 del estado estable medido más un 25 % de margen.",
+  "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= 1511 ms. 1511 ms es el p95 del estado estable medido (1208 ms) más un 25 % de margen.",
   "tags": ["devops", "cpu", "agotamiento", "mari", "gke"],
   "configuration": {
     "url_api": "http://34.68.14.217",
-    "segundos_de_consumo": "180"
+    "segundos_de_consumo": "180",
+    "carpeta": "caos/evidencia/ronda-0",
+    "p95_maximo_ms": "1511"
   },
   "steady-state-hypothesis": {
     "title": "La API está disponible y con sus dos réplicas listas",
@@ -49,6 +51,31 @@
     },
     {
       "type": "action",
+      "name": "muestrear-el-consumo-y-el-retraso-de-cada-pod",
+      "background": true,
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/muestrear.sh", "${carpeta}", "240"],
+        "timeout": 320
+      }
+    },
+    {
+      "type": "action",
+      "name": "lanzar-el-perfil-de-carga-de-k6",
+      "background": true,
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": [
+          "-c",
+          "P95_MAX_MS=${p95_maximo_ms} bash caos/carga/correr.sh ${carpeta} 1 || true"
+        ],
+        "timeout": 400
+      }
+    },
+    {
+      "type": "action",
       "name": "saturar-la-cpu-de-un-pod",
       "provider": {
         "type": "process",
@@ -68,6 +95,16 @@
         "timeout": 60
       },
       "pauses": { "after": 165 }
+    },
+    {
+      "type": "probe",
+      "name": "veredicto-de-la-hipotesis",
+      "provider": {
+        "type": "process",
+        "path": "python",
+        "arguments": ["caos/carga/veredicto.py", "${carpeta}/corrida-1.json", "--esperar", "120"],
+        "timeout": 180
+      }
     }
   ],
   "rollbacks": [
@@ -98,11 +135,12 @@
       "integrante": "Mari",
       "nube": "Google Cloud (GKE)",
       "metrica_objetivo": "Latencia p95 del flujo y tasa de éxito, medidas con k6",
-      "instrumento": "k6 (perfil fijo) y kubectl top; tablero de Cloud Monitoring",
+      "instrumento": "k6 (perfil fijo), kubectl top y el retraso del bucle de cada pod (/metrics)",
       "ventana_de_observacion": "3 minutos de consumo más la recuperación",
       "x_ms": 1511,
       "x_se_fija_con": "mediana del p95 de 3 corridas de estado estable más un 25 %",
       "estado_estable": "caos/evidencia/estado-estable/estado-estable.json",
+      "evidencia_de_la_ronda": "journal.json, corrida-1.json, lag-pods.csv y cpu-pods.txt en la carpeta de la ronda",
       "radio_de_impacto": "un solo pod del API de Mari (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
       "duracion_minutos": 3,
       "condiciones_de_aborto": [
@@ -110,7 +148,8 @@
         "p95 > 15000 ms durante 30 s",
         "cualquier error al intentar detener el consumo"
       ],
-      "interruptor_de_parada": "DELETE /fault/cpu en cada pod (caos/acciones/cpu.sh detener) o FAULT_HEADER_ENABLED=false (caos/acciones/cpu.sh deshabilitar). El consumo además se detiene solo a los 180 s y reiniciar el pod lo limpia."
+      "interruptor_de_parada": "DELETE /fault/cpu en cada pod (caos/acciones/cpu.sh detener) o FAULT_HEADER_ENABLED=false (caos/acciones/cpu.sh deshabilitar). El consumo además se detiene solo a los 180 s y reiniciar el pod lo limpia.",
+      "como_se_corre": "chaos run --rollback-strategy always --journal-path caos/evidencia/ronda-0/journal.json caos/experimentos/03-agotamiento.json; para la ronda 1 se añade --var carpeta=caos/evidencia/ronda-1"
     }
   ]
 }
