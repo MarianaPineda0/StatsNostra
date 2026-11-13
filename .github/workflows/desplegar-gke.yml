@@ -1,0 +1,86 @@
+name: Despliegue a GKE (v5)
+
+# Cada push a v5 (por ejemplo el merge de un PR) o un disparo manual construye la
+# imagen, migra la base y actualiza el clúster con scripts/desplegar-gke.sh, la
+# misma forma de desplegar que se usa a mano. Termina con una prueba de humo.
+on:
+  push:
+    branches: [v5]
+    paths:
+      - "app/**"
+      - "migrations/**"
+      - "k8s/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "alembic.ini"
+      - "scripts/desplegar-gke.sh"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Valor de X-App-Version que devolverá el API"
+        default: "5.0.0"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+# Dos despliegues a la vez pisarían el Job de migración y el rollout
+concurrency:
+  group: desplegar-gke
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+
+jobs:
+  desplegar:
+    name: Construir, migrar y desplegar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Código
+        uses: actions/checkout@v4
+
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Desplegar
+        env:
+          APP_VERSION: ${{ inputs.version || '5.0.0' }}
+        run: scripts/desplegar-gke.sh
+
+      # Si el API no contesta bien por la IP pública, el despliegue no se da
+      # por bueno aunque Kubernetes diga que las réplicas están listas
+      - name: Prueba de humo
+        run: |
+          IP=$(gcloud compute addresses describe statsnostra-v5-ip --region="$REGION" --format='value(address)')
+          for intento in $(seq 1 24); do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' "http://$IP/health/ready" || true)
+            [ "$codigo" = "200" ] && break
+            sleep 10
+          done
+          [ "$codigo" = "200" ] || { echo "El API no respondió 200 en /health/ready (último código: $codigo)"; exit 1; }
+
+          curl -fsS -D /tmp/cabeceras.txt -o /tmp/partidos.json "http://$IP/api/v1/partidos"
+          grep -qi '^x-app-name: mari' /tmp/cabeceras.txt
+          curl -fsS -o /dev/null "http://$IP/api/v1/predicciones"
+
+          {
+            echo "### API v5 desplegada en GKE"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| URL | http://$IP |"
+            echo "| Versión | $(grep -i '^x-app-version' /tmp/cabeceras.txt | tr -d '\r' | cut -d' ' -f2) |"
+            echo "| Réplicas listas | $(kubectl get deployment statsnostra-api -n statsnostra -o jsonpath='{.status.readyReplicas}') |"
+          } >> "$GITHUB_STEP_SUMMARY"

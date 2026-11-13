@@ -2,11 +2,29 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: statsnostra-config
+  namespace: statsnostra
 data:
   ENTORNO: "gke"
   LOG_LEVEL: "INFO"
-  TRADING_JOURNAL_API_URL: "http://20.232.234.128"
-  ECOMMERCE_API_URL: "http://k8s-default-ecommerc-233fe225e6-1328693903.us-east-2.elb.amazonaws.com"
-  REDIS_HOST: "10.120.123.163"
-  REDIS_PORT: "6379"
-  OTEL_SERVICE_NAME: "api-gcp"
+
+  # Identificación en X-App-Name / X-App-Version y en cada línea de log.
+  # APP_VERSION la fija el despliegue con la versión publicada.
+  APP_ID: "mari"
+  APP_VERSION: "${APP_VERSION}"
+
+  # Interruptor de fallos del grupo: apagado. Cada experimento lo enciende a
+  # mano y volver a "false" es el interruptor de parada.
+  FAULT_HEADER_ENABLED: "false"
+  FAULT_ERROR_RATE: "1.0"
+  FAULT_LATENCY_MS: "1000"
+
+  # El flujo del grupo entra por el coordinador y este API no llama a las
+  # otras nubes: sin URL el cliente externo simplemente no las consulta.
+  # Tampoco hay Redis en esta infraestructura.
+  TRADING_JOURNAL_API_URL: ""
+  ECOMMERCE_API_URL: ""
+  REDIS_HOST: ""
+
+  # Nombre propio en las métricas de Grafana Cloud (el endpoint y el token van
+  # en el Secret, y sin ellos OpenTelemetry queda apagado)
+  OTEL_SERVICE_NAME: "api-mari"
