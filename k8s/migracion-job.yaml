@@ -17,16 +17,25 @@ spec:
         # Sidecar nativo (restartPolicy: Always): el Job termina cuando termina
         # la migración. Con un contenedor normal el proxy no sale nunca y el
         # Job quedaría colgado. El startupProbe hace que la migración espere a
-        # que el proxy acepte conexiones.
+        # que el proxy esté listo.
+        #
+        # La sonda usa el endpoint de salud del proxy (--health-check) y no el
+        # puerto 5432: el proxy escucha la base solo en 127.0.0.1, y kubelet
+        # sondea la IP del pod, así que un tcpSocket sobre 5432 siempre falla y
+        # reinicia el contenedor en bucle. Solo el puerto de salud se abre a la
+        # IP del pod; el de la base sigue siendo local.
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           restartPolicy: Always
           args:
             - "--port=5432"
+            - "--health-check"
+            - "--http-address=0.0.0.0"
             - "${CLOUDSQL_CONNECTION_NAME}"
           startupProbe:
-            tcpSocket:
-              port: 5432
+            httpGet:
+              path: /startup
+              port: 9090
             periodSeconds: 2
             failureThreshold: 30
           resources:
