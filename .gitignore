@@ -26,3 +26,12 @@ Thumbs.db
 
 # Docker
 *.log
+
+# Terraform: cache de proveedores, estados y planes locales, y variables reales
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/plan.bin
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
