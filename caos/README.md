@@ -9,7 +9,14 @@ GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
 | Archivo | Para qué sirve |
 |---|---|
 | `experimentos/03-agotamiento.json` | El experimento como código (Chaos Toolkit): estado estable, hipótesis, método, radio de impacto, abortos y reversión |
-| `acciones/cpu.sh` | Los comandos que inyectan el fallo y lo revierten; los usa el experimento y se pueden correr a mano |
+| `acciones/cpu.sh` | Enciende y apaga el interruptor, satura la CPU de un pod y la detiene; se niega a reiniciar si hay tráfico |
+| `acciones/muestrear.sh` | Registra el consumo y el retraso del bucle de cada pod durante una ronda |
+| `carga/perfil.js` | El perfil de carga fijo de k6, el mismo en todas las rondas |
+| `carga/correr.sh` | Corre una vez el perfil con Docker y guarda la evidencia |
+| `carga/serie.sh` | Corre una serie de corridas con su entorno y su muestreo (estado estable) |
+| `carga/resumen.py` | Declara el estado estable con la mediana de las corridas |
+| `carga/veredicto.py` | Compara una ronda con el estado estable y dice si la hipótesis se cumple |
+| `evidencia/` | Resultados medidos: estado estable y, a medida que se hacen, cada ronda |
 
 ## El experimento
 
@@ -55,25 +62,42 @@ Se repite con el mismo protocolo en las rondas 0 y 1:
 P95_MAX_MS=1511 bash caos/carga/serie.sh caos/evidencia/CARPETA
 ```
 
-## Cómo se corre
+## Cómo se corre una ronda
 
-Desde la raíz del repositorio, con `kubectl` apuntando al clúster:
+Una sola ejecución del experimento hace toda la ronda: enciende el interruptor,
+arranca el muestreo de los pods, lanza k6, satura la CPU de un pod mientras corre
+la carga, espera el resultado, emite el veredicto contra el estado estable y revierte.
+
+**Antes de empezar** (todo debe cumplirse, si no, no se corre):
+
+1. La ventana está anunciada al grupo, con hora de inicio y de fin, y nadie más
+   corre carga ni reinicia nada mientras dura (unos 10 minutos).
+2. El código desplegado es el mismo de la ronda anterior: entre la ronda 0 y la 1
+   solo cambia la configuración o los manifiestos, no el código.
+3. `kubectl` apunta al clúster, Docker está abierto y el equipo no se suspende:
 
 ```bash
 gcloud container clusters get-credentials statsnostra-v5-gke --zone us-central1-a
+bash caos/acciones/cpu.sh trafico     # debe decir 0 peticiones
 ```
 
-1. **Avisar la ventana al grupo** (hora de inicio y de fin). Nadie más corre carga
-   ni reinicia nada mientras dura.
-2. Arrancar el perfil de k6 del grupo, en paralelo.
-3. Correr el experimento:
+**Ronda 0:**
 
 ```bash
-chaos run caos/experimentos/03-agotamiento.json
+chaos run --rollback-strategy always   --journal-path caos/evidencia/ronda-0/journal.json   caos/experimentos/03-agotamiento.json
 ```
 
-El experimento enciende el interruptor, satura la CPU de un pod, deja pasar la
-ventana de 3 minutos y, al terminar o si algo falla, revierte solo.
+**Ronda 1** (mismo perfil, mismo fallo, misma duración; solo cambia la carpeta):
+
+```bash
+chaos run --rollback-strategy always --var carpeta=caos/evidencia/ronda-1   --journal-path caos/evidencia/ronda-1/journal.json   caos/experimentos/03-agotamiento.json
+```
+
+`--rollback-strategy always` garantiza que la reversión corra aunque algo falle a
+mitad. La carpeta de cada ronda queda con el diario del experimento, el resumen de
+k6 (`corrida-1.json`), el retraso del bucle de cada pod (`lag-pods.csv`) y su
+consumo de CPU (`cpu-pods.txt`). Que la ronda refute la hipótesis no es un error: el
+veredicto queda en el diario con el motivo y la distancia a X.
 
 ## Parada y reversión
 
