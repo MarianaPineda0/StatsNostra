@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     grafana_otlp_token: str = ""
     otel_service_name: str = "api-gcp"
 
+    # Interruptor de fallos del grupo (ingenieria del caos). Apagado por
+    # defecto: solo con FAULT_HEADER_ENABLED=true la cabecera X-Inject-Fault
+    # hace algo, y nunca sobre las rutas de salud ni /metrics.
+    fault_header_enabled: bool = False
+    fault_error_rate: float = 1.0
+    fault_latency_ms: int = 1000
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

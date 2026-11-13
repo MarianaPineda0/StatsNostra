@@ -14,6 +14,7 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
+from app.core.fallos import InyeccionFallosMiddleware
 from app.core.logging_config import configurar_logging
 from app.core.middleware import (
     IdentificacionMiddleware,
@@ -36,6 +37,14 @@ configurar_tracing(
 )
 
 app.add_middleware(MetodoOverrideMiddleware)
+# El interruptor va por dentro del registro, para que los 500 inyectados
+# tambien queden en el log, y solo existe si esta habilitado
+if settings.fault_header_enabled:
+    app.add_middleware(
+        InyeccionFallosMiddleware,
+        tasa_error=settings.fault_error_rate,
+        latencia_ms=settings.fault_latency_ms,
+    )
 app.add_middleware(RegistroPeticionMiddleware, api=settings.app_id)
 app.add_middleware(
     IdentificacionMiddleware, nombre=settings.app_id, version=settings.app_version
