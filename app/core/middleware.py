@@ -2,6 +2,9 @@ import uuid
 
 from app.core.trace import TRACE_ID_HEADER, trace_id_var
 
+APP_NAME_HEADER = "X-App-Name"
+APP_VERSION_HEADER = "X-App-Version"
+
 
 class TraceIdMiddleware:
     """Propaga un identificador de correlacion (trace-id) por peticion.
@@ -68,3 +71,27 @@ class MetodoOverrideMiddleware:
                 scope["method"] = "QUERY"
 
         await self.app(scope, receive, send)
+
+
+class IdentificacionMiddleware:
+    """X-App-Name y X-App-Version en todas las respuestas, incluidos los
+    errores, para ver en vivo que API atendio la peticion."""
+
+    def __init__(self, app, nombre: str, version: str) -> None:
+        self.app = app
+        self.encabezados = [
+            (APP_NAME_HEADER.encode(), nombre.encode()),
+            (APP_VERSION_HEADER.encode(), version.encode()),
+        ]
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_con_identidad(message):
+            if message["type"] == "http.response.start":
+                message["headers"] = [*message["headers"], *self.encabezados]
+            await send(message)
+
+        await self.app(scope, receive, send_con_identidad)

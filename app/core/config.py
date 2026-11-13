@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     app_name: str = "StatsNostra"
     app_version: str = "0.1.0"
+    # Nombre con el que esta API se identifica en X-App-Name; el coordinador
+    # del grupo lo usa para ver en vivo que nube atendio cada peticion
+    app_id: str = "mari"
 
     # Identifica el ambiente activo para logs y comportamiento condicional
     entorno: str = "desarrollo"

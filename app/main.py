@@ -15,7 +15,11 @@ from app.api.routes import (
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.core.logging_config import configurar_logging
-from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
+from app.core.middleware import (
+    IdentificacionMiddleware,
+    MetodoOverrideMiddleware,
+    TraceIdMiddleware,
+)
 from app.core.tracing import configurar_tracing
 
 settings = get_settings()
@@ -31,6 +35,9 @@ configurar_tracing(
 )
 
 app.add_middleware(MetodoOverrideMiddleware)
+app.add_middleware(
+    IdentificacionMiddleware, nombre=settings.app_id, version=settings.app_version
+)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
 # quedar fijado antes que cualquier otro middleware o ruta se ejecute.
 app.add_middleware(TraceIdMiddleware)
