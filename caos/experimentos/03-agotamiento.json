@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "title": "Agotamiento de CPU de un pod del API de Mari en GKE",
+  "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= X ms. X es el p95 del estado estable medido más un 25 % de margen.",
+  "tags": ["devops", "cpu", "agotamiento", "mari", "gke"],
+  "configuration": {
+    "url_api": "http://34.68.14.217",
+    "segundos_de_consumo": "180"
+  },
+  "steady-state-hypothesis": {
+    "title": "La API está disponible y con sus dos réplicas listas",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "la-api-responde-por-la-ip-publica",
+        "tolerance": 200,
+        "provider": {
+          "type": "http",
+          "url": "${url_api}/health/ready",
+          "timeout": 15
+        }
+      },
+      {
+        "type": "probe",
+        "name": "las-dos-replicas-estan-listas",
+        "tolerance": "2",
+        "provider": {
+          "type": "process",
+          "path": "kubectl",
+          "arguments": [
+            "get", "deployment", "statsnostra-api", "-n", "statsnostra",
+            "-o", "jsonpath={.status.readyReplicas}"
+          ],
+          "timeout": 30
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "encender-el-interruptor-de-fallos",
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/cpu.sh", "habilitar"],
+        "timeout": 300
+      }
+    },
+    {
+      "type": "action",
+      "name": "saturar-la-cpu-de-un-pod",
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/cpu.sh", "saturar", "${segundos_de_consumo}", "0"],
+        "timeout": 60
+      },
+      "pauses": { "after": 20 }
+    },
+    {
+      "type": "probe",
+      "name": "consumo-de-cada-pod-durante-la-ventana",
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/cpu.sh", "estado"],
+        "timeout": 60
+      },
+      "pauses": { "after": 165 }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "detener-el-consumo-en-todos-los-pods",
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/cpu.sh", "detener"],
+        "timeout": 120
+      }
+    },
+    {
+      "type": "action",
+      "name": "apagar-el-interruptor-de-fallos",
+      "provider": {
+        "type": "process",
+        "path": "bash",
+        "arguments": ["caos/acciones/cpu.sh", "deshabilitar"],
+        "timeout": 300
+      }
+    }
+  ],
+  "extensions": [
+    {
+      "name": "metadatos",
+      "integrante": "Mari",
+      "nube": "Google Cloud (GKE)",
+      "metrica_objetivo": "Latencia p95 del flujo y tasa de éxito, medidas con k6",
+      "instrumento": "k6 (perfil fijo) y kubectl top; tablero de Cloud Monitoring",
+      "ventana_de_observacion": "3 minutos de consumo más la recuperación",
+      "x_ms": null,
+      "x_se_fija_con": "mediana del p95 de 3 corridas de estado estable más un 25 %",
+      "radio_de_impacto": "un solo pod del API de Mari (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
+      "duracion_minutos": 3,
+      "condiciones_de_aborto": [
+        "éxito del flujo < 50 %",
+        "p95 > 15000 ms durante 30 s",
+        "cualquier error al intentar detener el consumo"
+      ],
+      "interruptor_de_parada": "DELETE /fault/cpu en cada pod (caos/acciones/cpu.sh detener) o FAULT_HEADER_ENABLED=false (caos/acciones/cpu.sh deshabilitar). El consumo además se detiene solo a los 180 s y reiniciar el pod lo limpia."
+    }
+  ]
+}
