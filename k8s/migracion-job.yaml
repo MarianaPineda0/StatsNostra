@@ -1,0 +1,56 @@
+# Aplica las migraciones de Alembic con la misma imagen del API. Corre como Job
+# antes de cada despliegue; como el nombre es fijo, el despliegue lo borra y lo
+# vuelve a crear.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: statsnostra-migracion
+  namespace: statsnostra
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+
+      initContainers:
+        # Sidecar nativo (restartPolicy: Always): el Job termina cuando termina
+        # la migración. Con un contenedor normal el proxy no sale nunca y el
+        # Job quedaría colgado. El startupProbe hace que la migración espere a
+        # que el proxy acepte conexiones.
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          restartPolicy: Always
+          args:
+            - "--port=5432"
+            - "${CLOUDSQL_CONNECTION_NAME}"
+          startupProbe:
+            tcpSocket:
+              port: 5432
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+      containers:
+        - name: migracion
+          image: "${IMAGE}"
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - secretRef:
+                name: statsnostra-secrets
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
