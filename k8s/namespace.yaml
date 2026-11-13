@@ -1,0 +1,9 @@
+# Namespace propio del API. Además de ordenar los recursos, es la frontera sobre
+# la que se aplican las NetworkPolicy del experimento de segmentación: sin él no
+# habría "otro namespace" desde el que probar un salto este-oeste.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: statsnostra
+  labels:
+    app.kubernetes.io/name: statsnostra
