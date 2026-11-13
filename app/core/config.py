@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Interruptor de fallos del grupo (ingenieria del caos). Apagado por
     # defecto: solo con FAULT_HEADER_ENABLED=true la cabecera X-Inject-Fault
     # hace algo, y nunca sobre las rutas de salud ni /metrics.
+    # Readiness consciente de la saturación: si el retraso del bucle de eventos
+    # supera estos milisegundos, /health/ready responde 503 y Kubernetes saca el
+    # pod del balanceo. En 0 (por defecto) esa comprobación está apagada y la
+    # readiness solo dice que el proceso atiende, como en la ronda 0.
+    readiness_lag_ms: int = 0
+
     fault_header_enabled: bool = False
     fault_error_rate: float = 1.0
     fault_latency_ms: int = 1000
