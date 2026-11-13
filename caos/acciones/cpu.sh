@@ -62,6 +62,15 @@ peticiones_recientes() {
 
 cambiar_interruptor() {
   local valor="$1"
+  # Si ya está en el valor pedido no hay nada que cambiar. Importa sobre todo al
+  # apagar: la reversión de un experimento que ni llegó a encenderlo no debe
+  # reiniciar los pods ni pisar la medición de otros. FORZAR=1 lo salta.
+  local actual
+  actual="$(kubectl get configmap "$CONFIGMAP" -n "$NS" -o jsonpath='{.data.FAULT_HEADER_ENABLED}')"
+  if [ "$actual" = "$valor" ] && [ "${FORZAR:-0}" != 1 ]; then
+    echo "FAULT_HEADER_ENABLED ya estaba en $valor; no se reinicia nada."
+    return 0
+  fi
   # Encender reinicia los pods, así que no se hace con tráfico de otros. Apagar es
   # la parada de emergencia y nunca se bloquea.
   if [ "$valor" = true ] && [ "${FORZAR:-0}" != 1 ]; then
