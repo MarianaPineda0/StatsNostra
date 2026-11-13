@@ -3,7 +3,9 @@
 # experimento (caos/experimentos/03-agotamiento.json) y se pueden correr a mano.
 #
 # Uso: caos/acciones/cpu.sh COMANDO [argumentos]
-#   habilitar            enciende el interruptor de fallos y reinicia los pods
+#   trafico              cuenta las peticiones reales de los últimos 45 s
+#   habilitar            enciende el interruptor y reinicia los pods (se niega si hay
+#                        tráfico reciente; FORZAR=1 lo salta)
 #   deshabilitar         lo apaga y reinicia los pods (parada de emergencia)
 #   saturar [seg] [i]    satura la CPU del pod número i (0 por defecto) seg segundos
 #   detener              detiene el consumo en todos los pods
@@ -46,8 +48,31 @@ llamar_pod() {
   return "$codigo"
 }
 
+# Peticiones reales que han llegado a los pods en los últimos 45 s (sin contar las
+# sondas de salud). Reiniciar los pods mientras otro grupo mide con k6 tira sus
+# resultados: el tráfico se desploma y los tiempos se disparan.
+peticiones_recientes() {
+  local total=0 n pod
+  for pod in $(pods); do
+    n=$(kubectl logs "$pod" -n "$NS" -c api --since=45s 2>/dev/null | grep -c '"metodo"' || true)
+    total=$((total + n))
+  done
+  echo "$total"
+}
+
 cambiar_interruptor() {
   local valor="$1"
+  # Encender reinicia los pods, así que no se hace con tráfico de otros. Apagar es
+  # la parada de emergencia y nunca se bloquea.
+  if [ "$valor" = true ] && [ "${FORZAR:-0}" != 1 ]; then
+    local recientes
+    recientes="$(peticiones_recientes)"
+    if [ "$recientes" -gt 0 ]; then
+      echo "No se reinicia: llegaron $recientes peticiones en los últimos 45 s (¿hay una medición en curso?)." >&2
+      echo "Coordina la ventana con el grupo, o repite con FORZAR=1 si es a propósito." >&2
+      exit 3
+    fi
+  fi
   kubectl patch configmap "$CONFIGMAP" -n "$NS" --type merge \
     -p "{\"data\":{\"FAULT_HEADER_ENABLED\":\"$valor\"}}" >/dev/null
   # Los pods leen la configuración al arrancar: sin reinicio no cambia nada
@@ -57,6 +82,7 @@ cambiar_interruptor() {
 }
 
 case "${1:-}" in
+  trafico) echo "peticiones en los últimos 45 s: $(peticiones_recientes)" ;;
   habilitar) cambiar_interruptor true ;;
   deshabilitar) cambiar_interruptor false ;;
   saturar)
@@ -83,7 +109,7 @@ case "${1:-}" in
     kubectl top pods -n "$NS" --no-headers
     ;;
   *)
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,/^set -euo/{/^#/p}' "$0" | sed 's/^# \{0,1\}//'
     exit 2
     ;;
 esac
