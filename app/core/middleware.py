@@ -1,9 +1,16 @@
+import logging
+import time
 import uuid
 
 from app.core.trace import TRACE_ID_HEADER, trace_id_var
 
+logger = logging.getLogger(__name__)
+
 APP_NAME_HEADER = "X-App-Name"
 APP_VERSION_HEADER = "X-App-Version"
+# Kubernetes y Prometheus llaman a estas rutas cada pocos segundos; si
+# quedaran en el log taparian las peticiones reales del flujo
+RUTAS_SIN_REGISTRO = ("/health", "/metrics")
 
 
 class TraceIdMiddleware:
@@ -95,3 +102,48 @@ class IdentificacionMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_con_identidad)
+
+
+class RegistroPeticionMiddleware:
+    """Una linea de log por peticion: api, traceId, metodo, ruta, status y ms.
+
+    Es el formato acordado con el grupo; con el mismo traceId se reconstruye
+    el recorrido de una peticion por las tres nubes. Va por dentro de
+    TraceIdMiddleware (para tener el id) y por fuera del interruptor de
+    fallos (para registrar tambien los 500 inyectados).
+    """
+
+    def __init__(self, app, api: str) -> None:
+        self.app = app
+        self.api = api
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http" or scope["path"].startswith(RUTAS_SIN_REGISTRO):
+            await self.app(scope, receive, send)
+            return
+
+        inicio = time.perf_counter()
+        status = 500  # si la ruta revienta sin responder, queda registrado como 500
+
+        async def send_registrando(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_registrando)
+        finally:
+            logger.info(
+                "peticion",
+                extra={
+                    "datos": {
+                        "api": self.api,
+                        "traceId": trace_id_var.get() or None,
+                        "metodo": scope["method"],
+                        "ruta": scope["path"],
+                        "status": status,
+                        "ms": round((time.perf_counter() - inicio) * 1000, 1),
+                    }
+                },
+            )

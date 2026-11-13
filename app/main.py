@@ -18,6 +18,7 @@ from app.core.logging_config import configurar_logging
 from app.core.middleware import (
     IdentificacionMiddleware,
     MetodoOverrideMiddleware,
+    RegistroPeticionMiddleware,
     TraceIdMiddleware,
 )
 from app.core.tracing import configurar_tracing
@@ -35,6 +36,7 @@ configurar_tracing(
 )
 
 app.add_middleware(MetodoOverrideMiddleware)
+app.add_middleware(RegistroPeticionMiddleware, api=settings.app_id)
 app.add_middleware(
     IdentificacionMiddleware, nombre=settings.app_id, version=settings.app_version
 )
