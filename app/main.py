@@ -97,3 +97,18 @@ def manejar_regla_negocio(request: Request, exc: ReglaDeNegocioViolada) -> JSONR
 @app.get("/health", tags=["health"])
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Sondas de Kubernetes en rutas distintas: liveness decide si se reinicia el
+# contenedor y readiness si recibe trafico. Hoy responden igual (el proceso
+# esta vivo y atiende); tenerlas separadas permite endurecer solo la de
+# readiness, por ejemplo sacar del balanceo a un pod saturado, sin arriesgar
+# reinicios innecesarios.
+@app.get("/health/live", tags=["health"])
+def liveness() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["health"])
+def readiness() -> dict[str, str]:
+    return {"status": "ok"}
