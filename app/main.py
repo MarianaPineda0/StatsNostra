@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -23,12 +25,23 @@ from app.core.middleware import (
     RegistroPeticionMiddleware,
     TraceIdMiddleware,
 )
+from app.core.saturacion import monitor
 from app.core.tracing import configurar_tracing
 
 settings = get_settings()
 configurar_logging(settings.log_level, settings.app_id)
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+
+@asynccontextmanager
+async def ciclo_de_vida(_: FastAPI):
+    # El medidor corre siempre (despierta 10 veces por segundo, casi no cuesta)
+    # para tener la métrica de retraso aunque la readiness todavía no la use
+    monitor.iniciar()
+    yield
+    await monitor.detener()
+
+
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=ciclo_de_vida)
 configurar_tracing(
     app,
     settings.grafana_otlp_endpoint,
@@ -116,5 +129,13 @@ def liveness() -> dict[str, str]:
 
 
 @app.get("/health/ready", tags=["health"])
-def readiness() -> dict[str, str]:
+def readiness(response: Response) -> dict[str, str | float]:
+    # Con umbral configurado, un pod saturado deja de ser "ready": sale del
+    # balanceo y la otra réplica absorbe el tráfico mientras se recupera.
+    # liveness no hace esta comprobación, para no reiniciar un pod que solo
+    # está ocupado.
+    lag = monitor.lag_ms
+    if settings.readiness_lag_ms and lag > settings.readiness_lag_ms:
+        response.status_code = 503
+        return {"status": "saturado", "lag_ms": round(lag, 1)}
     return {"status": "ok"}
