@@ -86,7 +86,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CUENTA_API: statsnostra-v4-run@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
-      CONEXION_SQL: project-3f57bb8c-371e-4b9c-949:us-central1:statsnostra-v4-db-9f02
     steps:
       - name: Autenticar con GCP
         uses: google-github-actions/auth@v2
@@ -96,6 +95,14 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      # El nombre de la instancia lleva un sufijo aleatorio que cambia cada vez que
+      # Terraform la recrea: se lee de GCP en lugar de escribirlo a mano.
+      - name: Conexión de Cloud SQL
+        run: |
+          CONEXION=$(gcloud sql instances list --filter='name~statsnostra-v4-db' --format='value(connectionName)')
+          [ -n "$CONEXION" ] || { echo 'No hay una instancia de Cloud SQL statsnostra-v4-db'; exit 1; }
+          echo "CONEXION_SQL=$CONEXION" >> "$GITHUB_ENV"
 
       # Si el servicio ya existe, la linea base es la revision que hoy atiende
       # el 100 %. Si no, se crea la estable: primero se migra la base a su
