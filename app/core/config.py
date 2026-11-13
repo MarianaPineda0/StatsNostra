@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     app_name: str = "StatsNostra"
     app_version: str = "0.1.0"
+    # Nombre con el que esta API se identifica en X-App-Name; el coordinador
+    # del grupo lo usa para ver en vivo que nube atendio cada peticion
+    app_id: str = "mari"
 
     # Identifica el ambiente activo para logs y comportamiento condicional
     entorno: str = "desarrollo"
@@ -40,6 +43,13 @@ class Settings(BaseSettings):
     grafana_otlp_user: str = ""
     grafana_otlp_token: str = ""
     otel_service_name: str = "api-gcp"
+
+    # Interruptor de fallos del grupo (ingenieria del caos). Apagado por
+    # defecto: solo con FAULT_HEADER_ENABLED=true la cabecera X-Inject-Fault
+    # hace algo, y nunca sobre las rutas de salud ni /metrics.
+    fault_header_enabled: bool = False
+    fault_error_rate: float = 1.0
+    fault_latency_ms: int = 1000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

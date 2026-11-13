@@ -2,7 +2,9 @@ name: Pipeline de Pruebas
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, v5-develop]
+  pull_request:
+    branches: [v5]
 
 jobs:
   test:
@@ -51,6 +53,9 @@ jobs:
   deploy:
     name: Despliegue al ambiente correspondiente (Pruebas)
     needs: test
+    # Las ramas de la v5 solo corren las pruebas: el despliegue a Render es
+    # del ambiente de pruebas de la v1 y sigue saliendo unicamente de develop
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - name: Disparar deploy en Render

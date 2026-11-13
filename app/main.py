@@ -14,12 +14,18 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.exceptions import ConflictoDeDatos, RecursoNoEncontrado, ReglaDeNegocioViolada
+from app.core.fallos import InyeccionFallosMiddleware
 from app.core.logging_config import configurar_logging
-from app.core.middleware import MetodoOverrideMiddleware, TraceIdMiddleware
+from app.core.middleware import (
+    IdentificacionMiddleware,
+    MetodoOverrideMiddleware,
+    RegistroPeticionMiddleware,
+    TraceIdMiddleware,
+)
 from app.core.tracing import configurar_tracing
 
 settings = get_settings()
-configurar_logging(settings.log_level)
+configurar_logging(settings.log_level, settings.app_id)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 configurar_tracing(
@@ -31,6 +37,18 @@ configurar_tracing(
 )
 
 app.add_middleware(MetodoOverrideMiddleware)
+# El interruptor va por dentro del registro, para que los 500 inyectados
+# tambien queden en el log, y solo existe si esta habilitado
+if settings.fault_header_enabled:
+    app.add_middleware(
+        InyeccionFallosMiddleware,
+        tasa_error=settings.fault_error_rate,
+        latencia_ms=settings.fault_latency_ms,
+    )
+app.add_middleware(RegistroPeticionMiddleware, api=settings.app_id)
+app.add_middleware(
+    IdentificacionMiddleware, nombre=settings.app_id, version=settings.app_version
+)
 # Se agrega despues para quedar como la capa mas externa: el trace-id debe
 # quedar fijado antes que cualquier otro middleware o ruta se ejecute.
 app.add_middleware(TraceIdMiddleware)
@@ -78,4 +96,19 @@ def manejar_regla_negocio(request: Request, exc: ReglaDeNegocioViolada) -> JSONR
 
 @app.get("/health", tags=["health"])
 def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+# Sondas de Kubernetes en rutas distintas: liveness decide si se reinicia el
+# contenedor y readiness si recibe trafico. Hoy responden igual (el proceso
+# esta vivo y atiende); tenerlas separadas permite endurecer solo la de
+# readiness, por ejemplo sacar del balanceo a un pod saturado, sin arriesgar
+# reinicios innecesarios.
+@app.get("/health/live", tags=["health"])
+def liveness() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["health"])
+def readiness() -> dict[str, str]:
     return {"status": "ok"}
