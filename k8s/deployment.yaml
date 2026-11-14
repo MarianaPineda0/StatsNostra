@@ -6,8 +6,8 @@ metadata:
   labels:
     app: statsnostra-api
 spec:
-  # Réplicas fijas: la ronda 0 del experimento de CPU se mide así, sin HPA
-  replicas: 2
+  # Sin `replicas`: el número de réplicas lo gobierna el HPA (k8s/hpa.yaml, de 2 a 4). Si
+  # el Deployment lo fijara, cada despliegue lo devolvería a ese valor.
   selector:
     matchLabels:
       app: statsnostra-api
@@ -37,20 +37,26 @@ spec:
             - secretRef:
                 name: statsnostra-secrets
           resources:
+            # La ronda 0 del experimento de CPU se midió con 100m / 250m y los pods ya
+            # trabajaban al límite en estado estable; 200m / 500m es el valor de la ronda 1
             requests:
-              cpu: "100m"
+              cpu: "200m"
               memory: "128Mi"
             limits:
-              cpu: "250m"
+              cpu: "500m"
               memory: "256Mi"
           # Rutas distintas: liveness decide si se reinicia el contenedor y
-          # readiness si recibe tráfico
+          # readiness si recibe tráfico. La readiness también falla si el pod está
+          # saturado (READINESS_LAG_MS en el ConfigMap), y se revisa cada 5 s para
+          # sacarlo del balanceo tras 2 fallos seguidos
           readinessProbe:
             httpGet:
               path: /health/ready
               port: 8000
             initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           livenessProbe:
             httpGet:
               path: /health/live

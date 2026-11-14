@@ -46,7 +46,7 @@ case "${1:-}" in
     # reinicia los pods, y así arrancan ya con el umbral nuevo
     parchar_lag "$UMBRAL_LAG_MS" >/dev/null
     kubectl patch deployment "$DEPLOY" -n "$NS" --patch-file k8s/mejoras/recursos-y-sondas.yaml >/dev/null
-    kubectl apply -n "$NS" -f k8s/mejoras/hpa.yaml >/dev/null
+    kubectl apply -n "$NS" -f k8s/hpa.yaml >/dev/null
     esperar_pods
     echo "Mejoras aplicadas."
     ;;
@@ -67,7 +67,7 @@ case "${1:-}" in
     parchar_lag "$UMBRAL_LAG_MS" --dry-run=server
     kubectl patch deployment "$DEPLOY" -n "$NS" --patch-file k8s/mejoras/recursos-y-sondas.yaml --dry-run=server
     kubectl patch deployment "$DEPLOY" -n "$NS" --patch-file k8s/mejoras/recursos-y-sondas-base.yaml --dry-run=server
-    kubectl apply -n "$NS" -f k8s/mejoras/hpa.yaml --dry-run=server
+    kubectl apply -n "$NS" -f k8s/hpa.yaml --dry-run=server
     ;;
   *)
     sed -n '2,/^set -euo/{/^#/p}' "$0" | sed 's/^# \{0,1\}//'

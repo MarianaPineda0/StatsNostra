@@ -19,9 +19,10 @@ data:
   FAULT_LATENCY_MS: "1000"
 
   # Readiness que saca del balanceo a un pod saturado: milisegundos de retraso
-  # del bucle de eventos a partir de los cuales /health/ready responde 503. En 0
-  # está apagada (ronda 0); la ronda 1 la enciende con el umbral medido.
-  READINESS_LAG_MS: "0"
+  # del bucle de eventos a partir de los cuales /health/ready responde 503. 0 la
+  # apaga (como en la ronda 0); 50 es el umbral medido en la ronda 0: el pod saturado
+  # lo superó en 27 de 36 muestras y el sano en 2 de 36.
+  READINESS_LAG_MS: "50"
 
   # El flujo del grupo entra por el coordinador y este API no llama a las
   # otras nubes: sin URL el cliente externo simplemente no las consulta.

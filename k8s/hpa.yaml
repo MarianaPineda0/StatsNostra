@@ -1,7 +1,5 @@
-# Mejora de la ronda 1 del experimento de agotamiento de CPU. NO se aplica en el
-# despliegue normal: la ronda 0 se mide con 2 réplicas fijas, y si el HPA ya
-# estuviera puesto no habría nada que comparar. Se aplica a mano al empezar la
-# ronda 1 con caos/acciones/mejoras.sh aplicar
+# Autoescalado del API por CPU, de 2 a 4 réplicas. Nació como mejora de la ronda 1 del
+# experimento de agotamiento de CPU y ahora lo aplica el despliegue normal.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

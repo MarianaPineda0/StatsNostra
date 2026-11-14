@@ -72,6 +72,7 @@ kubectl logs job/statsnostra-migracion --namespace "${NAMESPACE}" -c migracion -
 paso "Despliegue del API"
 envsubst < k8s/deployment.yaml | kubectl apply -f -
 envsubst < k8s/service.yaml | kubectl apply -f -
+kubectl apply -f k8s/hpa.yaml
 kubectl rollout status deployment/statsnostra-api --namespace "${NAMESPACE}" --timeout=300s
 
 paso "Listo"
