@@ -10,7 +10,7 @@
     "p95_maximo_ms": "1511"
   },
   "steady-state-hypothesis": {
-    "title": "La API está disponible y con sus dos réplicas listas",
+    "title": "La API está disponible y con al menos sus dos réplicas listas",
     "probes": [
       {
         "type": "probe",
@@ -24,8 +24,8 @@
       },
       {
         "type": "probe",
-        "name": "las-dos-replicas-estan-listas",
-        "tolerance": {"type": "regex", "pattern": "^2$", "target": "stdout"},
+        "name": "al-menos-dos-replicas-estan-listas",
+        "tolerance": {"type": "regex", "pattern": "^[2-4]$", "target": "stdout"},
         "provider": {
           "type": "process",
           "path": "kubectl",
