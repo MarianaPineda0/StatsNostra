@@ -1,0 +1,87 @@
+<html><head><meta charset="utf-8"><title>Informe de caos: API de Mari en GKE</title>
+<style>
+body { font-family: sans-serif; font-size: 10pt; line-height: 1.35; color: #222; }
+h1 { font-size: 15pt; margin: 0 0 2pt 0; }
+h2 { font-size: 11pt; margin: 9pt 0 2pt 0; color: #0072B2; }
+p { margin: 2pt 0 3pt 0; }
+table { border-collapse: collapse; margin: 3pt 0 5pt 0; page-break-inside: avoid; }
+h2 { page-break-after: avoid; }
+th, td { border: 0.6pt solid #999; padding: 2pt 4pt; font-size: 9pt; }
+th { background-color: #E8F1F8; }
+.sub { color: #555; font-size: 9pt; margin-bottom: 4pt; }
+.nota { color: #555; font-size: 8pt; }
+</style></head><body>
+
+<h1>Agotamiento de CPU de un pod del API de Mari en GKE</h1>
+<p class="sub">Informe de experimento de caos (DevOps) · Mari, Google Cloud · 14 de noviembre de 2026</p>
+
+<h2>1. Resumen y arquitectura</h2>
+<p>El flujo del grupo entra por el coordinador (Azure, Juan), consulta la API de Pipe (AWS) y la API de Mari, que corre en GKE con dos réplicas detrás de la IP pública 34.68.14.217 y se conecta a Cloud SQL por proxy. Cada petición lleva un <i>X-Trace-Id</i> que queda en los logs de las tres nubes. Se inyectó una falla real, un pod que consume CPU durante 3 minutos, y se midió el efecto con un perfil de carga fijo. La ronda 0 refutó la hipótesis (p95 de 3.425 ms contra un máximo de 1.511 ms). Tras aplicar tres mejoras de configuración, la ronda 1 la cumplió con un p95 de 774 ms.</p>
+<p><img src="arquitectura.png" width="470"/></p>
+
+<h2>2. Estado estable medido y perfil de carga</h2>
+<p><b>Perfil fijo (k6):</b> tres tramos consecutivos de 60 s con 5, 15 y 30 usuarios virtuales, contra el flujo completo <i>GET /api/v2/trades/5540</i> en el coordinador. Es el mismo en el estado estable y en las dos rondas. <b>Estado estable:</b> tres corridas sin ninguna falla, con el sistema sin tráfico ajeno (las 21.302 llamadas esperadas coinciden con las vistas en los logs del API).</p>
+<table>
+<tr><th>Corrida</th><th>Flujos</th><th>Éxito</th><th>p50</th><th>p95</th><th>p99</th></tr>
+<tr><td>1</td><td>3.693</td><td>100 %</td><td>418 ms</td><td>1.208 ms</td><td>1.714 ms</td></tr>
+<tr><td>2</td><td>3.634</td><td>100 %</td><td>450 ms</td><td>1.200 ms</td><td>1.594 ms</td></tr>
+<tr><td>3</td><td>3.324</td><td>100 %</td><td>450 ms</td><td>1.479 ms</td><td>1.934 ms</td></tr>
+<tr><td><b>Mediana</b></td><td>20,1 req/s</td><td><b>100 %</b></td><td><b>450 ms</b></td><td><b>1.208 ms</b></td><td><b>1.714 ms</b></td></tr>
+</table>
+<p>El umbral <b>X = 1.511 ms</b> es el p95 mediano más un 25 % de margen, fijado antes de ejecutar la falla. Un dato que importa más adelante: con esa carga cada pod ya llegaba a unos 310 m de CPU con un límite de 250 m, así que en estado estable trabajaba sin holgura.</p>
+
+<h2>3. Hipótesis, métrica objetivo, instrumento y ventana (Mari)</h2>
+<p><b>Hipótesis:</b> dado el perfil P, cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito ≥ 99 % y un p95 ≤ 1.511 ms. <b>Métrica objetivo:</b> latencia p95 del flujo y tasa de éxito. <b>Instrumento:</b> k6 (resumen JSON por corrida), con <i>kubectl top</i>, el retraso del bucle de eventos de cada pod (<i>/metrics</i>) y los logs por trace id como apoyo para el diagnóstico. <b>Ventana:</b> 3 minutos de consumo más la recuperación; el experimento corre 8 minutos con la reversión.</p>
+
+<h2>4. Método y radio de impacto</h2>
+<p>El experimento es código (<i>caos/experimentos/03-agotamiento.json</i>, Chaos Toolkit) y una sola ejecución es una ronda completa: comprueba el estado estable (la API responde y hay réplicas listas); enciende el interruptor de fallos; arranca el muestreo y lanza k6 en paralelo; satura un pod con <i>POST /fault/cpu</i> (hilo que quema CPU, solo con el interruptor encendido y la cabecera <i>X-Inject-Fault: cpu</i>); a los 165 s lee el consumo de cada pod; calcula el veredicto contra X; y revierte. El consumo tiene tope de 600 s y se detiene solo a los 180 s.</p>
+<p><b>Radio de impacto:</b> un solo pod de la API de Mari; la otra réplica no se toca; tráfico sintético de k6. <b>Reversión</b> (probada antes de la primera ejecución): <i>DELETE /fault/cpu</i> en cada pod y <i>FAULT_HEADER_ENABLED=false</i> con reinicio; corre siempre, aunque el experimento falle. <b>Condiciones de aborto:</b> éxito del flujo &lt; 50 %, p95 &gt; 15 s sostenido durante 30 s, o cualquier error al detener el consumo. Como cada reinicio de pods o carga de k6 pisa las mediciones del resto del grupo, las acciones se niegan a correr si el API recibió peticiones en los últimos 45 s y cada ventana se acordó con los tres.</p>
+
+<h2>5. Ronda 0: resultados y modo de fallo</h2>
+<table>
+<tr><th>Métrica</th><th>Estado estable</th><th>Ronda 0</th><th>Veredicto</th></tr>
+<tr><td>Éxito</td><td>100 %</td><td>100 % (0 fallos en 2.682 flujos)</td><td>cumple</td></tr>
+<tr><td>p95 del flujo</td><td>1.208 ms</td><td>3.425 ms (+183 %; X = 1.511 ms)</td><td><b>no cumple</b></td></tr>
+<tr><td>p99 / máximo</td><td>1.714 ms / n.d.</td><td>4.596 ms / 5.945 ms</td><td></td></tr>
+</table>
+<p><b>Modo de fallo: degradación sin errores.</b> El pod saturado no devolvió errores; respondió con lentitud. Por eso la tasa de éxito no cambió y la sonda de readiness, que solo comprobaba que el proceso contestara, nunca lo sacó del balanceo.</p>
+<p><b>Diagnóstico (logs por trace id, retraso del bucle y CPU).</b> En el pod saturado el retraso del bucle subió de 1 ms a una mediana de 79 ms (máximo 387 ms) y su CPU quedó pegada al límite de 250 m. En los logs, el pod saturado atendió el API con p50 de 1.490 ms y p95 de 2.615 ms; el sano, con p95 de 110 ms. El trace id <b>k6-1-134</b> lo muestra en una sola iteración: sus dos llamadas al API tardaron 2.399 ms (<i>partidos</i>) y 3.704 ms (<i>predicciones</i>), las dos en el pod saturado; con el mismo trace id, en la ronda 1 tardaron 19 y 18 ms en un pod sano. Como el flujo espera a esa respuesta, el p95 extremo a extremo subió aunque la mediana se mantuvo (400 ms): la mitad del tráfico seguía llegando a un pod sano, y esa cola larga son las peticiones que cayeron en el saturado.</p>
+<p><img src="tablero.png" width="515"/></p>
+<p class="nota">Figura: las dos rondas, un panel por métrica (franja = ventana de inyección). Datos y reproducción en <i>caos/tablero/</i>.</p>
+
+<h2 style="page-break-before: always">6. Mejoras aplicadas y su justificación</h2>
+<table>
+<tr><th>Mejora</th><th>Cambio</th><th>Por qué (dato de la ronda 0)</th></tr>
+<tr><td>Readiness que saca del balanceo al pod saturado</td><td>La sonda falla si el retraso del bucle supera 50 ms (<i>READINESS_LAG_MS=50</i>); revisa cada 5 s y retira el pod tras 2 fallos (antes 30 s)</td><td>El pod saturado superó 50 ms en 27 de 36 muestras; el sano solo en 2 de 36 (picos aislados)</td></tr>
+<tr><td>Requests y limits</td><td>CPU 200 m / 500 m (antes 100 m / 250 m)</td><td>Con 250 m los pods ya estaban al límite en estado estable: no había holgura ni para el flujo sano</td></tr>
+<tr><td>HPA por CPU</td><td>60 %, mínimo 2 y máximo 4 réplicas</td><td>Capacidad adicional cuando un pod pierde rendimiento: se amplía en vez de repartir su carga entre los demás</td></tr>
+</table>
+<p>Las tres son solo de configuración: el código de la API no cambió entre las rondas. El umbral de 50 ms sale de la medición de la ronda 0, no de una cifra elegida de antemano.</p>
+
+<h2>7. Ronda 1 y comparación</h2>
+<p>Mismo perfil, mismo fallo, misma duración, mismo pod objetivo (el primero de la lista de pods vivos).</p>
+<table>
+<tr><th>Métrica</th><th>Estado estable</th><th>Ronda 0</th><th>Ronda 1</th><th>Variación ronda 1 frente a ronda 0</th></tr>
+<tr><td>Tasa de éxito</td><td>100 %</td><td>100 %</td><td>100 %</td><td>sin cambio</td></tr>
+<tr><td>p50</td><td>450 ms</td><td>400 ms</td><td>405 ms</td><td>+1,3 %</td></tr>
+<tr><td><b>p95</b></td><td>1.208 ms</td><td>3.425 ms</td><td><b>774 ms</b></td><td><b>−77,4 %</b></td></tr>
+<tr><td>p99</td><td>1.714 ms</td><td>4.596 ms</td><td>1.082 ms</td><td>−76,5 %</td></tr>
+<tr><td>Máximo</td><td>n.d.</td><td>5.945 ms</td><td>1.571 ms</td><td>−73,6 %</td></tr>
+<tr><td>Flujos completados</td><td>~3.700</td><td>2.682</td><td>4.264</td><td>+59,0 %</td></tr>
+<tr><td>p95 frente a X = 1.511 ms</td><td>−20 %</td><td>+127 %</td><td>−49 %</td><td>cumple la hipótesis</td></tr>
+</table>
+<p><b>Conclusión sobre la hipótesis:</b> en la ronda 0 se refuta (p95 de 3.425 ms) y en la ronda 1 se sostiene (774 ms, incluso por debajo del estado estable, 1.208 ms, porque ahora hay más CPU por pod). El pod saturado siguió quemando CPU toda la ventana (llegó a 500 m, su nuevo límite, con retraso del bucle de 51 ms de mediana); lo que cambió es cuánto tráfico recibió: entre el minuto 1 y el 3 atendió entre un 2 % y un 8 % de las llamadas, frente al 6 % al 34 % de la ronda 0, y sus respuestas, aunque más lentas que las de sus vecinos (p95 de 569 ms contra 28 a 43 ms), dejaron de dominar la cola. El HPA pasó de 2 a 4 réplicas en el primer minuto de carga.</p>
+<p class="nota">Límites de la comparación: una sola ejecución por ronda; las tres mejoras se aplicaron juntas, así que no se separa lo que aportó cada una; y la ronda 1 tiene más capacidad que la 0 por diseño. El p95 de k6 incluye la red y las otras nubes del flujo.</p>
+
+<h2 style="page-break-before: always">8. Hallazgos inesperados y backlog de resiliencia</h2>
+<p><b>Hallazgos.</b> (1) <b>Falla gris:</b> un pod degradado no produce errores, y ni la disponibilidad ni la tasa de éxito lo detectan; solo la latencia o la señal de saturación lo muestran. (2) <b>Sin holgura de serie:</b> el dimensionamiento inicial dejaba a los pods sanos en su límite de CPU. (3) <b>El reparto del tráfico no es parejo:</b> durante el primer minuto y medio de carga (5 usuarios) el pod saturado no recibió ni una llamada del API en ninguna de las dos rondas, y su parte creció al llegar más usuarios. La explicación probable es que el coordinador reutiliza conexiones y el balanceador reparte por conexión y no por petición; no se verificó y queda como línea de estudio. (4) <b>El HPA cambia lo que se compara:</b> el nodo extra tardó unos 3 minutos en aparecer, y la sonda del experimento que exigía exactamente 2 réplicas marcó el journal de la ronda 1 como "deviated"; se cambió a "entre 2 y 4". (5) <b>El método también falló y se corrigió:</b> la ronda 0 necesitó cuatro intentos porque la guarda de tráfico se contaba a sí misma, el experimento eligió un pod que se estaba terminando (sin confirmar que el consumo empezara, un experimento que no ocurre da un veredicto idéntico a uno real) y el journal se cortaba por codificación. Cada corrección quedó en el código.</p>
+<p><b>Riesgo abierto:</b> si todos los pods saturaran a la vez, la readiness por saturación dejaría el balanceador sin destinos y la caída sería total.</p>
+<table>
+<tr><th>Backlog (prioridad)</th><th>Acción</th></tr>
+<tr><td>1 · Alta</td><td>Límite de concurrencia por pod que responda 503 rápido en vez de encolar, y timeouts y circuito abierto en las llamadas del coordinador, para que la saturación sea un error acotado y no una cola</td></tr>
+<tr><td>2 · Alta</td><td>Alerta sobre el retraso del bucle y la latencia p95 por pod: hoy una falla gris solo se ve en el tablero</td></tr>
+<tr><td>3 · Media</td><td>HPA por latencia o peticiones por segundo además de CPU, y capacidad de reserva en nodos para no esperar 3 minutos</td></tr>
+<tr><td>4 · Media</td><td>PodDisruptionBudget, clúster regional (hoy es de una sola zona) y repetir la ronda varias veces para dar un intervalo al p95</td></tr>
+<tr><td>5 · Baja</td><td>Enviar las métricas de la API a Grafana Cloud con <i>service.name</i> propio y correr este experimento como puerta del pipeline</td></tr>
+</table>
+</body></html>

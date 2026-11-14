@@ -17,6 +17,8 @@ GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
 | `carga/serie.sh` | Corre una serie de corridas con su entorno y su muestreo (estado estable) |
 | `carga/resumen.py` | Declara el estado estable con la mediana de las corridas |
 | `carga/veredicto.py` | Compara una ronda con el estado estable y dice si la hipótesis se cumple |
+| `tablero/` | Tablero de las dos rondas (ventana de inyección y métrica objetivo), con sus datos y cómo regenerarlo |
+| `informe/` | Informe del experimento (PDF de 4 páginas, con su fuente HTML y el script que lo genera) |
 | `evidencia/` | Resultados medidos: estado estable y, a medida que se hacen, cada ronda |
 
 ## El experimento
