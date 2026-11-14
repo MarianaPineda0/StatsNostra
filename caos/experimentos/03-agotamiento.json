@@ -25,7 +25,7 @@
       {
         "type": "probe",
         "name": "las-dos-replicas-estan-listas",
-        "tolerance": "2",
+        "tolerance": {"type": "regex", "pattern": "^2$", "target": "stdout"},
         "provider": {
           "type": "process",
           "path": "kubectl",
