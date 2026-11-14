@@ -48,13 +48,15 @@ llamar_pod() {
   return "$codigo"
 }
 
-# Peticiones reales que han llegado a los pods en los últimos 45 s (sin contar las
-# sondas de salud). Reiniciar los pods mientras otro grupo mide con k6 tira sus
-# resultados: el tráfico se desploma y los tiempos se disparan.
+# Peticiones al API de negocio (/api/) que han llegado a los pods en los últimos 45 s.
+# No cuenta las sondas de salud ni las rutas de control del propio experimento
+# (/fault/cpu): si contara esas, el experimento se frenaría a sí mismo en el segundo en
+# que satura un pod y lanza k6. Reiniciar los pods mientras otro grupo mide con k6 tira
+# sus resultados: el tráfico se desploma y los tiempos se disparan.
 peticiones_recientes() {
   local total=0 n pod
   for pod in $(pods); do
-    n=$(kubectl logs "$pod" -n "$NS" -c api --since=45s 2>/dev/null | grep -c '"metodo"' || true)
+    n=$(kubectl logs "$pod" -n "$NS" -c api --since=45s 2>/dev/null | grep -c '"ruta": "/api/' || true)
     total=$((total + n))
   done
   echo "$total"
