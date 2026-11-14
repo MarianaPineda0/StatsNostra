@@ -1,0 +1,13 @@
+2026-11-14T22:00:18Z statsnostra-api-7b87d7666b-k6lp6=380m statsnostra-api-7b87d7666b-m55bc=284m 
+2026-11-14T22:00:37Z statsnostra-api-7b87d7666b-k6lp6=380m statsnostra-api-7b87d7666b-m55bc=284m 
+2026-11-14T22:00:56Z statsnostra-api-7b87d7666b-k6lp6=267m statsnostra-api-7b87d7666b-m55bc=4m 
+2026-11-14T22:01:14Z statsnostra-api-7b87d7666b-dmzvw=178m statsnostra-api-7b87d7666b-k6lp6=500m statsnostra-api-7b87d7666b-m55bc=86m statsnostra-api-7b87d7666b-v6kvj=237m 
+2026-11-14T22:01:34Z statsnostra-api-7b87d7666b-dmzvw=178m statsnostra-api-7b87d7666b-k6lp6=500m statsnostra-api-7b87d7666b-m55bc=86m statsnostra-api-7b87d7666b-v6kvj=237m 
+2026-11-14T22:01:53Z statsnostra-api-7b87d7666b-dmzvw=4m statsnostra-api-7b87d7666b-k6lp6=500m statsnostra-api-7b87d7666b-m55bc=158m statsnostra-api-7b87d7666b-v6kvj=119m 
+2026-11-14T22:02:12Z statsnostra-api-7b87d7666b-dmzvw=69m statsnostra-api-7b87d7666b-k6lp6=505m statsnostra-api-7b87d7666b-m55bc=241m statsnostra-api-7b87d7666b-v6kvj=172m 
+2026-11-14T22:02:31Z statsnostra-api-7b87d7666b-dmzvw=69m statsnostra-api-7b87d7666b-k6lp6=505m statsnostra-api-7b87d7666b-m55bc=241m statsnostra-api-7b87d7666b-v6kvj=172m 
+2026-11-14T22:02:50Z statsnostra-api-7b87d7666b-dmzvw=192m statsnostra-api-7b87d7666b-k6lp6=512m statsnostra-api-7b87d7666b-m55bc=187m statsnostra-api-7b87d7666b-v6kvj=215m 
+2026-11-14T22:03:10Z statsnostra-api-7b87d7666b-dmzvw=307m statsnostra-api-7b87d7666b-k6lp6=511m statsnostra-api-7b87d7666b-m55bc=132m statsnostra-api-7b87d7666b-v6kvj=247m 
+2026-11-14T22:03:29Z statsnostra-api-7b87d7666b-dmzvw=307m statsnostra-api-7b87d7666b-k6lp6=511m statsnostra-api-7b87d7666b-m55bc=132m statsnostra-api-7b87d7666b-v6kvj=247m 
+2026-11-14T22:03:47Z statsnostra-api-7b87d7666b-dmzvw=57m statsnostra-api-7b87d7666b-k6lp6=268m statsnostra-api-7b87d7666b-m55bc=197m statsnostra-api-7b87d7666b-v6kvj=154m 
+2026-11-14T22:04:06Z statsnostra-api-7b87d7666b-dmzvw=57m statsnostra-api-7b87d7666b-k6lp6=268m statsnostra-api-7b87d7666b-m55bc=197m statsnostra-api-7b87d7666b-v6kvj=154m 
