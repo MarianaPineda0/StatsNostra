@@ -21,7 +21,12 @@ export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 # HTTP/1.1 evita los cortes de HTTP/2 que se ven a ratos contra las APIs de Google
 export GODEBUG="${GODEBUG:-http2client=0}"
 
-pods() { kubectl get pods -n "$NS" -l app="$DEPLOY" -o jsonpath='{.items[*].metadata.name}'; }
+# Solo pods vivos: tras un reinicio, el pod viejo sigue unos segundos en la lista con estado
+# Terminating. Si el experimento lo elige, el túnel no abre y la CPU nunca se satura.
+pods() {
+  kubectl get pods -n "$NS" -l app="$DEPLOY" \
+    -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}'
+}
 
 # Llama a un pod concreto por port-forward. El balanceador reparte entre las dos
 # réplicas, y el experimento necesita saturar solo una: por eso no se pasa por él.
@@ -102,7 +107,14 @@ case "${1:-}" in
     lista=($(pods))
     pod="${lista[$indice]:?no existe el pod número $indice}"
     echo "Saturando la CPU del pod $pod durante ${segundos}s"
-    llamar_pod "$pod" POST "/fault/cpu?segundos=$segundos" -H "X-Inject-Fault: cpu"
+    respuesta="$(llamar_pod "$pod" POST "/fault/cpu?segundos=$segundos" -H "X-Inject-Fault: cpu")" || true
+    echo "$respuesta"
+    # Si el pod no confirma que está quemando CPU, el experimento no mide nada: se corta
+    # aquí y no se descubre al final con un veredicto de un experimento que no ocurrió
+    if ! echo "$respuesta" | grep -Eq '"activo": ?true'; then
+      echo "El pod $pod no confirmó el consumo de CPU." >&2
+      exit 1
+    fi
     ;;
   detener)
     # Se intenta en todos los pods y no se corta si uno falla: parar tiene que ser

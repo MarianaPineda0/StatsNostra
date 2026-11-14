@@ -81,6 +81,8 @@ gcloud container clusters get-credentials statsnostra-v5-gke --zone us-central1-
 bash caos/acciones/cpu.sh trafico     # debe decir 0 peticiones
 ```
 
+En Windows hay que correr Chaos Toolkit con `PYTHONUTF8=1`: el resumen de k6 trae caracteres que la codificación por defecto no puede escribir y el journal quedaría cortado.
+
 **Ronda 0:**
 
 ```bash

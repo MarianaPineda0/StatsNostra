@@ -19,7 +19,9 @@ export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 export GODEBUG="${GODEBUG:-http2client=0}"
 mkdir -p "$CARPETA"
 
-pods=($(kubectl get pods -n "$NS" -l app=statsnostra-api -o jsonpath='{.items[*].metadata.name}'))
+# Sin pods en terminación: tras un reinicio el viejo sigue unos segundos en la lista
+pods=($(kubectl get pods -n "$NS" -l app=statsnostra-api \
+  -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}'))
 echo "timestamp_utc,pod,lag_ms" > "$CARPETA/lag-pods.csv"
 
 # Un túnel por pod abierto durante todo el muestreo. Se consulta /metrics (que el
