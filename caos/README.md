@@ -10,6 +10,7 @@ GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
 |---|---|
 | `experimentos/03-agotamiento.json` | El experimento como código (Chaos Toolkit): estado estable, hipótesis, método, radio de impacto, abortos y reversión |
 | `acciones/cpu.sh` | Enciende y apaga el interruptor, satura la CPU de un pod y la detiene; se niega a reiniciar si hay tráfico |
+| `acciones/mejoras.sh` | Aplica o revierte las mejoras de la ronda 1 (recursos, sonda de readiness por saturación y HPA) |
 | `acciones/muestrear.sh` | Registra el consumo y el retraso del bucle de cada pod durante una ronda |
 | `carga/perfil.js` | El perfil de carga fijo de k6, el mismo en todas las rondas |
 | `carga/correr.sh` | Corre una vez el perfil con Docker y guarda la evidencia |
@@ -87,6 +88,14 @@ En Windows hay que correr Chaos Toolkit con `PYTHONUTF8=1`: el resumen de k6 tra
 
 ```bash
 chaos run --rollback-strategy always   --journal-path caos/evidencia/ronda-0/journal.json   caos/experimentos/03-agotamiento.json
+```
+
+**Antes de la ronda 1** se aplican las mejoras, con ventana anunciada porque reinicia los pods:
+
+```bash
+bash caos/acciones/mejoras.sh probar     # valida contra el clúster sin cambiar nada
+bash caos/acciones/mejoras.sh aplicar
+bash caos/acciones/mejoras.sh estado
 ```
 
 **Ronda 1** (mismo perfil, mismo fallo, misma duración; solo cambia la carpeta):

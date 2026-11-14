@@ -1,7 +1,7 @@
 # Mejora de la ronda 1 del experimento de agotamiento de CPU. NO se aplica en el
 # despliegue normal: la ronda 0 se mide con 2 réplicas fijas, y si el HPA ya
 # estuviera puesto no habría nada que comparar. Se aplica a mano al empezar la
-# ronda 1:  kubectl apply -f k8s/mejoras/hpa.yaml
+# ronda 1 con caos/acciones/mejoras.sh aplicar
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -20,6 +20,6 @@ spec:
         name: cpu
         target:
           type: Utilization
-          # Se mide contra el request (100m): al 60 % son 60m de CPU por pod,
-          # así que escala antes de que el pod llegue a su límite de 250m
+          # Se mide contra el request (200m en la ronda 1): al 60 % son 120m por pod,
+          # así que escala antes de que el pod llegue a su límite de 500m
           averageUtilization: 60
