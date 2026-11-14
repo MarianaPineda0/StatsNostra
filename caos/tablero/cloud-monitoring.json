@@ -1,0 +1,132 @@
+{
+  "displayName": "StatsNostra v5 · Agotamiento de CPU (rondas 0 y 1)",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 12,
+        "height": 3,
+        "widget": {
+          "title": "Ventanas de inyección (UTC)",
+          "text": {
+            "format": "MARKDOWN",
+            "content": "**Ronda 0** (sin mejoras): 2026-11-14 17:54:12 a 17:57:12 UTC. **Ronda 1** (con mejoras): 2026-11-14 22:00:14 a 22:03:14 UTC. En cada una, un pod del API quemó CPU durante 180 s mientras k6 mandaba 5, 15 y 30 usuarios de 60 s. Ajusta el rango de tiempo del tablero a cada ventana para compararlas."
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 3,
+        "width": 6,
+        "height": 5,
+        "widget": {
+          "title": "CPU por pod (núcleos)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type=\"k8s_container\" AND resource.label.\"namespace_name\"=\"statsnostra\" AND resource.label.\"container_name\"=\"api\" AND metric.type=\"kubernetes.io/container/cpu/core_usage_time\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "crossSeriesReducer": "REDUCE_NONE",
+                      "groupByFields": [
+                        "resource.label.\"pod_name\""
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${resource.labels.pod_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "núcleos",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 3,
+        "width": 6,
+        "height": 5,
+        "widget": {
+          "title": "Uso de CPU frente al límite del pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type=\"k8s_container\" AND resource.label.\"namespace_name\"=\"statsnostra\" AND resource.label.\"container_name\"=\"api\" AND metric.type=\"kubernetes.io/container/cpu/limit_utilization\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN",
+                      "crossSeriesReducer": "REDUCE_NONE",
+                      "groupByFields": [
+                        "resource.label.\"pod_name\""
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${resource.labels.pod_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "fracción del límite",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 8,
+        "width": 12,
+        "height": 5,
+        "widget": {
+          "title": "Memoria por pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "resource.type=\"k8s_container\" AND resource.label.\"namespace_name\"=\"statsnostra\" AND resource.label.\"container_name\"=\"api\" AND metric.type=\"kubernetes.io/container/memory/used_bytes\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN",
+                      "crossSeriesReducer": "REDUCE_NONE",
+                      "groupByFields": [
+                        "resource.label.\"pod_name\""
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${resource.labels.pod_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "bytes",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
