@@ -1,0 +1,567 @@
+{
+  "chaoslib-version": "1.45.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "node": "DEED07HP",
+  "experiment": {
+    "version": "1.0.0",
+    "title": "Agotamiento de CPU de un pod del API de Mari en GKE",
+    "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= 1511 ms. 1511 ms es el p95 del estado estable medido (1208 ms) más un 25 % de margen.",
+    "tags": [
+      "devops",
+      "cpu",
+      "agotamiento",
+      "mari",
+      "gke"
+    ],
+    "configuration": {
+      "url_api": "http://34.68.14.217",
+      "segundos_de_consumo": "180",
+      "carpeta": "caos/evidencia/ronda-0",
+      "p95_maximo_ms": "1511"
+    },
+    "steady-state-hypothesis": {
+      "title": "La API está disponible y con sus dos réplicas listas",
+      "probes": [
+        {
+          "type": "probe",
+          "name": "la-api-responde-por-la-ip-publica",
+          "tolerance": 200,
+          "provider": {
+            "type": "http",
+            "url": "${url_api}/health/ready",
+            "timeout": 15
+          }
+        },
+        {
+          "type": "probe",
+          "name": "las-dos-replicas-estan-listas",
+          "tolerance": {
+            "type": "regex",
+            "pattern": "^2$",
+            "target": "stdout"
+          },
+          "provider": {
+            "type": "process",
+            "path": "kubectl",
+            "arguments": [
+              "get",
+              "deployment",
+              "statsnostra-api",
+              "-n",
+              "statsnostra",
+              "-o",
+              "jsonpath={.status.readyReplicas}"
+            ],
+            "timeout": 30
+          }
+        }
+      ]
+    },
+    "method": [
+      {
+        "type": "action",
+        "name": "encender-el-interruptor-de-fallos",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "habilitar"
+          ],
+          "timeout": 300
+        }
+      },
+      {
+        "type": "action",
+        "name": "muestrear-el-consumo-y-el-retraso-de-cada-pod",
+        "background": true,
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/muestrear.sh",
+            "${carpeta}",
+            "240"
+          ],
+          "timeout": 320
+        }
+      },
+      {
+        "type": "action",
+        "name": "lanzar-el-perfil-de-carga-de-k6",
+        "background": true,
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "-c",
+            "P95_MAX_MS=${p95_maximo_ms} bash caos/carga/correr.sh ${carpeta} 1 || true"
+          ],
+          "timeout": 400
+        }
+      },
+      {
+        "type": "action",
+        "name": "saturar-la-cpu-de-un-pod",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "saturar",
+            "${segundos_de_consumo}",
+            "0"
+          ],
+          "timeout": 60
+        },
+        "pauses": {
+          "after": 20
+        }
+      },
+      {
+        "type": "probe",
+        "name": "consumo-de-cada-pod-durante-la-ventana",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "estado"
+          ],
+          "timeout": 60
+        },
+        "pauses": {
+          "after": 165
+        }
+      },
+      {
+        "type": "probe",
+        "name": "veredicto-de-la-hipotesis",
+        "provider": {
+          "type": "process",
+          "path": "python",
+          "arguments": [
+            "caos/carga/veredicto.py",
+            "${carpeta}/corrida-1.json",
+            "--esperar",
+            "120"
+          ],
+          "timeout": 180
+        }
+      }
+    ],
+    "rollbacks": [
+      {
+        "type": "action",
+        "name": "detener-el-consumo-en-todos-los-pods",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "detener"
+          ],
+          "timeout": 120
+        }
+      },
+      {
+        "type": "action",
+        "name": "apagar-el-interruptor-de-fallos",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "deshabilitar"
+          ],
+          "timeout": 300
+        }
+      }
+    ],
+    "extensions": [
+      {
+        "name": "metadatos",
+        "integrante": "Mari",
+        "nube": "Google Cloud (GKE)",
+        "metrica_objetivo": "Latencia p95 del flujo y tasa de éxito, medidas con k6",
+        "instrumento": "k6 (perfil fijo), kubectl top y el retraso del bucle de cada pod (/metrics)",
+        "ventana_de_observacion": "3 minutos de consumo más la recuperación",
+        "x_ms": 1511,
+        "x_se_fija_con": "mediana del p95 de 3 corridas de estado estable más un 25 %",
+        "estado_estable": "caos/evidencia/estado-estable/estado-estable.json",
+        "evidencia_de_la_ronda": "journal.json, corrida-1.json, lag-pods.csv y cpu-pods.txt en la carpeta de la ronda",
+        "radio_de_impacto": "un solo pod del API de Mari (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
+        "duracion_minutos": 3,
+        "condiciones_de_aborto": [
+          "éxito del flujo < 50 %",
+          "p95 > 15000 ms durante 30 s",
+          "cualquier error al intentar detener el consumo"
+        ],
+        "interruptor_de_parada": "DELETE /fault/cpu en cada pod (caos/acciones/cpu.sh detener) o FAULT_HEADER_ENABLED=false (caos/acciones/cpu.sh deshabilitar). El consumo además se detiene solo a los 180 s y reiniciar el pod lo limpia.",
+        "como_se_corre": "chaos run --rollback-strategy always --journal-path caos/evidencia/ronda-0/journal.json caos/experimentos/03-agotamiento.json; para la ronda 1 se añade --var carpeta=caos/evidencia/ronda-1"
+      }
+    ],
+    "dry": null
+  },
+  "start": "2026-11-14T17:53:18.072329+00:00",
+  "status": "completed",
+  "deviated": false,
+  "steady_states": {
+    "before": {
+      "steady_state_met": true,
+      "probes": [
+        {
+          "activity": {
+            "type": "probe",
+            "name": "la-api-responde-por-la-ip-publica",
+            "tolerance": 200,
+            "provider": {
+              "type": "http",
+              "url": "${url_api}/health/ready",
+              "timeout": 15
+            }
+          },
+          "output": {
+            "status": 200,
+            "headers": {
+              "date": "Sat, 14 Nov 2026 17:53:14 GMT",
+              "server": "uvicorn",
+              "content-length": "15",
+              "content-type": "application/json",
+              "x-app-name": "mari",
+              "x-app-version": "5.0.0",
+              "x-trace-id": "a6a54a18-cc6c-4fd2-ae2e-36f97c2d0337"
+            },
+            "body": {
+              "status": "ok"
+            }
+          },
+          "start": "2026-11-14T17:53:18.072329+00:00",
+          "status": "succeeded",
+          "end": "2026-11-14T17:53:18.314841+00:00",
+          "duration": 0.242512,
+          "tolerance_met": true
+        },
+        {
+          "activity": {
+            "type": "probe",
+            "name": "las-dos-replicas-estan-listas",
+            "tolerance": {
+              "type": "regex",
+              "pattern": "^2$",
+              "target": "stdout"
+            },
+            "provider": {
+              "type": "process",
+              "path": "kubectl",
+              "arguments": [
+                "get",
+                "deployment",
+                "statsnostra-api",
+                "-n",
+                "statsnostra",
+                "-o",
+                "jsonpath={.status.readyReplicas}"
+              ],
+              "timeout": 30
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "2",
+            "stderr": ""
+          },
+          "start": "2026-11-14T17:53:18.314841+00:00",
+          "status": "succeeded",
+          "end": "2026-11-14T17:53:19.440029+00:00",
+          "duration": 1.125188,
+          "tolerance_met": true
+        }
+      ]
+    },
+    "after": {
+      "steady_state_met": true,
+      "probes": [
+        {
+          "activity": {
+            "type": "probe",
+            "name": "la-api-responde-por-la-ip-publica",
+            "tolerance": 200,
+            "provider": {
+              "type": "http",
+              "url": "${url_api}/health/ready",
+              "timeout": 15
+            }
+          },
+          "output": {
+            "status": 200,
+            "headers": {
+              "date": "Sat, 14 Nov 2026 17:58:14 GMT",
+              "server": "uvicorn",
+              "content-length": "15",
+              "content-type": "application/json",
+              "x-app-name": "mari",
+              "x-app-version": "5.0.0",
+              "x-trace-id": "d159fdfa-8ffe-40b3-a5cb-82e3bd959a5f"
+            },
+            "body": {
+              "status": "ok"
+            }
+          },
+          "start": "2026-11-14T17:58:17.370552+00:00",
+          "status": "succeeded",
+          "end": "2026-11-14T17:58:17.619325+00:00",
+          "duration": 0.248773,
+          "tolerance_met": true
+        },
+        {
+          "activity": {
+            "type": "probe",
+            "name": "las-dos-replicas-estan-listas",
+            "tolerance": {
+              "type": "regex",
+              "pattern": "^2$",
+              "target": "stdout"
+            },
+            "provider": {
+              "type": "process",
+              "path": "kubectl",
+              "arguments": [
+                "get",
+                "deployment",
+                "statsnostra-api",
+                "-n",
+                "statsnostra",
+                "-o",
+                "jsonpath={.status.readyReplicas}"
+              ],
+              "timeout": 30
+            }
+          },
+          "output": {
+            "status": 0,
+            "stdout": "2",
+            "stderr": ""
+          },
+          "start": "2026-11-14T17:58:17.628399+00:00",
+          "status": "succeeded",
+          "end": "2026-11-14T17:58:18.236059+00:00",
+          "duration": 0.60766,
+          "tolerance_met": true
+        }
+      ]
+    },
+    "during": []
+  },
+  "run": [
+    {
+      "activity": {
+        "type": "action",
+        "name": "encender-el-interruptor-de-fallos",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "habilitar"
+          ],
+          "timeout": 300
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "Waiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"statsnostra-api\" successfully rolled out\nFAULT_HEADER_ENABLED=true\n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:53:19.443651+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:54:11.851051+00:00",
+      "duration": 52.4074
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "muestrear-el-consumo-y-el-retraso-de-cada-pod",
+        "background": true,
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/muestrear.sh",
+            "${carpeta}",
+            "240"
+          ],
+          "timeout": 320
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:54:11.851051+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:58:17.361589+00:00",
+      "duration": 245.510538
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "lanzar-el-perfil-de-carga-de-k6",
+        "background": true,
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "-c",
+            "P95_MAX_MS=${p95_maximo_ms} bash caos/carga/correr.sh ${carpeta} 1 || true"
+          ],
+          "timeout": 400
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "Corrida 1 contra https://api-coordinador.jollybeach-fbb8b9ad.eastus.azurecontainerapps.io (trade 5540), inicio 2026-11-14T17:54:14Z\n\n         /\\      Grafana   /‾‾/  \n    /\\  /  \\     |\\  __   /  /   \n   /  \\/    \\    | |/ /  /   ‾‾\\ \n  /          \\   |   (  |  (‾)  |\n / __________ \\  |_|\\_\\  \\_____/ \n\n\n     execution: local\n        script: -\n        output: -\n\n     scenarios: (100.00%) 1 scenario, 30 max VUs, 3m30s max duration (incl. graceful stop):\n              * perfil: Up to 30 looping VUs for 3m0s over 3 stages (gracefulRampDown: 10s, gracefulStop: 30s)\n\n\nrunning (0m01.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   1% ] 00/30 VUs  0m01.0s/3m00.0s\n\nrunning (0m02.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   1% ] 00/30 VUs  0m02.0s/3m00.0s\n\nrunning (0m03.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   2% ] 00/30 VUs  0m03.0s/3m00.0s\n\nrunning (0m04.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   2% ] 00/30 VUs  0m04.0s/3m00.0s\n\nrunning (0m05.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   3% ] 00/30 VUs  0m05.0s/3m00.0s\n\nrunning (0m06.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   3% ] 00/30 VUs  0m06.0s/3m00.0s\n\nrunning (0m07.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   4% ] 00/30 VUs  0m07.0s/3m00.0s\n\nrunning (0m08.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   4% ] 00/30 VUs  0m08.0s/3m00.0s\n\nrunning (0m09.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   5% ] 00/30 VUs  0m09.0s/3m00.0s\n\nrunning (0m10.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   6% ] 00/30 VUs  0m10.0s/3m00.0s\n\nrunning (0m11.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   6% ] 00/30 VUs  0m11.0s/3m00.0s\n\nrunning (0m12.0s), 00/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   7% ] 00/30 VUs  0m12.0s/3m00.0s\n\nrunning (0m13.0s), 01/30 VUs, 0 complete and 0 interrupted iterations\nperfil   [   7% ] 01/30 VUs  0m13.0s/3m00.0s\n\nrunning (0m14.0s), 01/30 VUs, 3 complete and 0 interrupted iterations\nperfil   [   8% ] 01/30 VUs  0m14.0s/3m00.0s\n\nrunning (0m15.0s), 01/30 VUs, 5 complete and 0 interrupted iterations\nperfil   [   8% ] 01/30 VUs  0m15.0s/3m00.0s\n\nrunning (0m16.0s), 01/30 VUs, 8 complete and 0 interrupted iterations\nperfil   [   9% ] 01/30 VUs  0m16.0s/3m00.0s\n\nrunning (0m17.0s), 01/30 VUs, 10 complete and 0 interrupted iterations\nperfil   [   9% ] 01/30 VUs  0m17.0s/3m00.0s\n\nrunning (0m18.0s), 01/30 VUs, 13 complete and 0 interrupted iterations\nperfil   [  10% ] 01/30 VUs  0m18.0s/3m00.0s\n\nrunning (0m19.0s), 01/30 VUs, 16 complete and 0 interrupted iterations\nperfil   [  11% ] 01/30 VUs  0m19.0s/3m00.0s\n\nrunning (0m20.0s), 01/30 VUs, 18 complete and 0 interrupted iterations\nperfil   [  11% ] 01/30 VUs  0m20.0s/3m00.0s\n\nrunning (0m21.0s), 01/30 VUs, 21 complete and 0 interrupted iterations\nperfil   [  12% ] 01/30 VUs  0m21.0s/3m00.0s\n\nrunning (0m22.0s), 01/30 VUs, 24 complete and 0 interrupted iterations\nperfil   [  12% ] 01/30 VUs  0m22.0s/3m00.0s\n\nrunning (0m23.0s), 01/30 VUs, 26 complete and 0 interrupted iterations\nperfil   [  13% ] 01/30 VUs  0m23.0s/3m00.0s\n\nrunning (0m24.0s), 01/30 VUs, 29 complete and 0 interrupted iterations\nperfil   [  13% ] 01/30 VUs  0m24.0s/3m00.0s\n\nrunning (0m25.0s), 02/30 VUs, 33 complete and 0 interrupted iterations\nperfil   [  14% ] 02/30 VUs  0m25.0s/3m00.0s\n\nrunning (0m26.0s), 02/30 VUs, 39 complete and 0 interrupted iterations\nperfil   [  14% ] 02/30 VUs  0m26.0s/3m00.0s\n\nrunning (0m27.0s), 02/30 VUs, 44 complete and 0 interrupted iterations\nperfil   [  15% ] 02/30 VUs  0m27.0s/3m00.0s\n\nrunning (0m28.0s), 02/30 VUs, 50 complete and 0 interrupted iterations\nperfil   [  16% ] 02/30 VUs  0m28.0s/3m00.0s\n\nrunning (0m29.0s), 02/30 VUs, 55 complete and 0 interrupted iterations\nperfil   [  16% ] 02/30 VUs  0m29.0s/3m00.0s\n\nrunning (0m30.0s), 02/30 VUs, 61 complete and 0 interrupted iterations\nperfil   [  17% ] 02/30 VUs  0m30.0s/3m00.0s\n\nrunning (0m31.0s), 02/30 VUs, 67 complete and 0 interrupted iterations\nperfil   [  17% ] 02/30 VUs  0m31.0s/3m00.0s\n\nrunning (0m32.0s), 02/30 VUs, 73 complete and 0 interrupted iterations\nperfil   [  18% ] 02/30 VUs  0m32.0s/3m00.0s\n\nrunning (0m33.0s), 02/30 VUs, 79 complete and 0 interrupted iterations\nperfil   [  18% ] 02/30 VUs  0m33.0s/3m00.0s\n\nrunning (0m34.0s), 02/30 VUs, 84 complete and 0 interrupted iterations\nperfil   [  19% ] 02/30 VUs  0m34.0s/3m00.0s\n\nrunning (0m35.0s), 02/30 VUs, 90 complete and 0 interrupted iterations\nperfil   [  19% ] 02/30 VUs  0m35.0s/3m00.0s\n\nrunning (0m36.0s), 02/30 VUs, 95 complete and 0 interrupted iterations\nperfil   [  20% ] 02/30 VUs  0m36.0s/3m00.0s\n\nrunning (0m37.0s), 03/30 VUs, 103 complete and 0 interrupted iterations\nperfil   [  21% ] 03/30 VUs  0m37.0s/3m00.0s\n\nrunning (0m38.0s), 03/30 VUs, 112 complete and 0 interrupted iterations\nperfil   [  21% ] 03/30 VUs  0m38.0s/3m00.0s\n\nrunning (0m39.0s), 03/30 VUs, 120 complete and 0 interrupted iterations\nperfil   [  22% ] 03/30 VUs  0m39.0s/3m00.0s\n\nrunning (0m40.0s), 03/30 VUs, 128 complete and 0 interrupted iterations\nperfil   [  22% ] 03/30 VUs  0m40.0s/3m00.0s\n\nrunning (0m41.0s), 03/30 VUs, 137 complete and 0 interrupted iterations\nperfil   [  23% ] 03/30 VUs  0m41.0s/3m00.0s\n\nrunning (0m42.0s), 03/30 VUs, 146 complete and 0 interrupted iterations\nperfil   [  23% ] 03/30 VUs  0m42.0s/3m00.0s\n\nrunning (0m43.0s), 03/30 VUs, 154 complete and 0 interrupted iterations\nperfil   [  24% ] 03/30 VUs  0m43.0s/3m00.0s\n\nrunning (0m44.0s), 03/30 VUs, 163 complete and 0 interrupted iterations\nperfil   [  24% ] 03/30 VUs  0m44.0s/3m00.0s\n\nrunning (0m45.0s), 03/30 VUs, 171 complete and 0 interrupted iterations\nperfil   [  25% ] 03/30 VUs  0m45.0s/3m00.0s\n\nrunning (0m46.0s), 03/30 VUs, 180 complete and 0 interrupted iterations\nperfil   [  26% ] 03/30 VUs  0m46.0s/3m00.0s\n\nrunning (0m47.0s), 03/30 VUs, 188 complete and 0 interrupted iterations\nperfil   [  26% ] 03/30 VUs  0m47.0s/3m00.0s\n\nrunning (0m48.0s), 03/30 VUs, 196 complete and 0 interrupted iterations\nperfil   [  27% ] 03/30 VUs  0m48.0s/3m00.0s\n\nrunning (0m49.0s), 04/30 VUs, 206 complete and 0 interrupted iterations\nperfil   [  27% ] 04/30 VUs  0m49.0s/3m00.0s\n\nrunning (0m50.0s), 04/30 VUs, 218 complete and 0 interrupted iterations\nperfil   [  28% ] 04/30 VUs  0m50.0s/3m00.0s\n\nrunning (0m51.0s), 04/30 VUs, 230 complete and 0 interrupted iterations\nperfil   [  28% ] 04/30 VUs  0m51.0s/3m00.0s\n\nrunning (0m52.0s), 04/30 VUs, 240 complete and 0 interrupted iterations\nperfil   [  29% ] 04/30 VUs  0m52.0s/3m00.0s\n\nrunning (0m53.0s), 04/30 VUs, 252 complete and 0 interrupted iterations\nperfil   [  29% ] 04/30 VUs  0m53.0s/3m00.0s\n\nrunning (0m54.0s), 04/30 VUs, 263 complete and 0 interrupted iterations\nperfil   [  30% ] 04/30 VUs  0m54.0s/3m00.0s\n\nrunning (0m55.0s), 04/30 VUs, 275 complete and 0 interrupted iterations\nperfil   [  31% ] 04/30 VUs  0m55.0s/3m00.0s\n\nrunning (0m56.0s), 04/30 VUs, 287 complete and 0 interrupted iterations\nperfil   [  31% ] 04/30 VUs  0m56.0s/3m00.0s\n\nrunning (0m57.0s), 04/30 VUs, 299 complete and 0 interrupted iterations\nperfil   [  32% ] 04/30 VUs  0m57.0s/3m00.0s\n\nrunning (0m58.0s), 04/30 VUs, 310 complete and 0 interrupted iterations\nperfil   [  32% ] 04/30 VUs  0m58.0s/3m00.0s\n\nrunning (0m59.0s), 04/30 VUs, 321 complete and 0 interrupted iterations\nperfil   [  33% ] 04/30 VUs  0m59.0s/3m00.0s\n\nrunning (1m00.0s), 04/30 VUs, 333 complete and 0 interrupted iterations\nperfil   [  33% ] 04/30 VUs  1m00.0s/3m00.0s\n\nrunning (1m01.0s), 05/30 VUs, 347 complete and 0 interrupted iterations\nperfil   [  34% ] 05/30 VUs  1m01.0s/3m00.0s\n\nrunning (1m02.0s), 05/30 VUs, 361 complete and 0 interrupted iterations\nperfil   [  34% ] 05/30 VUs  1m02.0s/3m00.0s\n\nrunning (1m03.0s), 05/30 VUs, 375 complete and 0 interrupted iterations\nperfil   [  35% ] 05/30 VUs  1m03.0s/3m00.0s\n\nrunning (1m04.0s), 05/30 VUs, 389 complete and 0 interrupted iterations\nperfil   [  36% ] 05/30 VUs  1m04.0s/3m00.0s\n\nrunning (1m05.0s), 05/30 VUs, 404 complete and 0 interrupted iterations\nperfil   [  36% ] 05/30 VUs  1m05.0s/3m00.0s\n\nrunning (1m06.0s), 05/30 VUs, 417 complete and 0 interrupted iterations\nperfil   [  37% ] 05/30 VUs  1m06.0s/3m00.0s\n\nrunning (1m07.0s), 06/30 VUs, 434 complete and 0 interrupted iterations\nperfil   [  37% ] 06/30 VUs  1m07.0s/3m00.0s\n\nrunning (1m08.0s), 06/30 VUs, 450 complete and 0 interrupted iterations\nperfil   [  38% ] 06/30 VUs  1m08.0s/3m00.0s\n\nrunning (1m09.0s), 06/30 VUs, 467 complete and 0 interrupted iterations\nperfil   [  38% ] 06/30 VUs  1m09.0s/3m00.0s\n\nrunning (1m10.0s), 06/30 VUs, 483 complete and 0 interrupted iterations\nperfil   [  39% ] 06/30 VUs  1m10.0s/3m00.0s\n\nrunning (1m11.0s), 06/30 VUs, 500 complete and 0 interrupted iterations\nperfil   [  39% ] 06/30 VUs  1m11.0s/3m00.0s\n\nrunning (1m12.0s), 06/30 VUs, 517 complete and 0 interrupted iterations\nperfil   [  40% ] 06/30 VUs  1m12.0s/3m00.0s\n\nrunning (1m13.0s), 07/30 VUs, 535 complete and 0 interrupted iterations\nperfil   [  41% ] 07/30 VUs  1m13.0s/3m00.0s\n\nrunning (1m14.0s), 07/30 VUs, 553 complete and 0 interrupted iterations\nperfil   [  41% ] 07/30 VUs  1m14.0s/3m00.0s\n\nrunning (1m15.0s), 07/30 VUs, 571 complete and 0 interrupted iterations\nperfil   [  42% ] 07/30 VUs  1m15.0s/3m00.0s\n\nrunning (1m16.0s), 07/30 VUs, 590 complete and 0 interrupted iterations\nperfil   [  42% ] 07/30 VUs  1m16.0s/3m00.0s\n\nrunning (1m17.0s), 07/30 VUs, 609 complete and 0 interrupted iterations\nperfil   [  43% ] 07/30 VUs  1m17.0s/3m00.0s\n\nrunning (1m18.0s), 07/30 VUs, 626 complete and 0 interrupted iterations\nperfil   [  43% ] 07/30 VUs  1m18.0s/3m00.0s\n\nrunning (1m19.0s), 08/30 VUs, 645 complete and 0 interrupted iterations\nperfil   [  44% ] 08/30 VUs  1m19.0s/3m00.0s\n\nrunning (1m20.0s), 08/30 VUs, 666 complete and 0 interrupted iterations\nperfil   [  44% ] 08/30 VUs  1m20.0s/3m00.0s\n\nrunning (1m21.0s), 08/30 VUs, 685 complete and 0 interrupted iterations\nperfil   [  45% ] 08/30 VUs  1m21.0s/3m00.0s\n\nrunning (1m22.0s), 08/30 VUs, 704 complete and 0 interrupted iterations\nperfil   [  46% ] 08/30 VUs  1m22.0s/3m00.0s\n\nrunning (1m23.0s), 08/30 VUs, 721 complete and 0 interrupted iterations\nperfil   [  46% ] 08/30 VUs  1m23.0s/3m00.0s\n\nrunning (1m24.0s), 08/30 VUs, 742 complete and 0 interrupted iterations\nperfil   [  47% ] 08/30 VUs  1m24.0s/3m00.0s\n\nrunning (1m25.0s), 09/30 VUs, 755 complete and 0 interrupted iterations\nperfil   [  47% ] 09/30 VUs  1m25.0s/3m00.0s\n\nrunning (1m26.0s), 09/30 VUs, 769 complete and 0 interrupted iterations\nperfil   [  48% ] 09/30 VUs  1m26.0s/3m00.0s\n\nrunning (1m27.0s), 09/30 VUs, 783 complete and 0 interrupted iterations\nperfil   [  48% ] 09/30 VUs  1m27.0s/3m00.0s\n\nrunning (1m28.0s), 09/30 VUs, 803 complete and 0 interrupted iterations\nperfil   [  49% ] 09/30 VUs  1m28.0s/3m00.0s\n\nrunning (1m29.0s), 09/30 VUs, 820 complete and 0 interrupted iterations\nperfil   [  49% ] 09/30 VUs  1m29.0s/3m00.0s\n\nrunning (1m30.0s), 09/30 VUs, 832 complete and 0 interrupted iterations\nperfil   [  50% ] 09/30 VUs  1m30.0s/3m00.0s\n\nrunning (1m31.0s), 10/30 VUs, 852 complete and 0 interrupted iterations\nperfil   [  51% ] 10/30 VUs  1m31.0s/3m00.0s\n\nrunning (1m32.0s), 10/30 VUs, 865 complete and 0 interrupted iterations\nperfil   [  51% ] 10/30 VUs  1m32.0s/3m00.0s\n\nrunning (1m33.0s), 10/30 VUs, 881 complete and 0 interrupted iterations\nperfil   [  52% ] 10/30 VUs  1m33.0s/3m00.0s\n\nrunning (1m34.0s), 10/30 VUs, 898 complete and 0 interrupted iterations\nperfil   [  52% ] 10/30 VUs  1m34.0s/3m00.0s\n\nrunning (1m35.0s), 10/30 VUs, 911 complete and 0 interrupted iterations\nperfil   [  53% ] 10/30 VUs  1m35.0s/3m00.0s\n\nrunning (1m36.0s), 10/30 VUs, 928 complete and 0 interrupted iterations\nperfil   [  53% ] 10/30 VUs  1m36.0s/3m00.0s\n\nrunning (1m37.0s), 11/30 VUs, 947 complete and 0 interrupted iterations\nperfil   [  54% ] 11/30 VUs  1m37.0s/3m00.0s\n\nrunning (1m38.0s), 11/30 VUs, 965 complete and 0 interrupted iterations\nperfil   [  54% ] 11/30 VUs  1m38.0s/3m00.0s\n\nrunning (1m39.0s), 11/30 VUs, 983 complete and 0 interrupted iterations\nperfil   [  55% ] 11/30 VUs  1m39.0s/3m00.0s\n\nrunning (1m40.0s), 11/30 VUs, 1000 complete and 0 interrupted iterations\nperfil   [  56% ] 11/30 VUs  1m40.0s/3m00.0s\n\nrunning (1m41.0s), 11/30 VUs, 1019 complete and 0 interrupted iterations\nperfil   [  56% ] 11/30 VUs  1m41.0s/3m00.0s\n\nrunning (1m42.0s), 11/30 VUs, 1032 complete and 0 interrupted iterations\nperfil   [  57% ] 11/30 VUs  1m42.0s/3m00.0s\n\nrunning (1m43.0s), 12/30 VUs, 1050 complete and 0 interrupted iterations\nperfil   [  57% ] 12/30 VUs  1m43.0s/3m00.0s\n\nrunning (1m44.0s), 12/30 VUs, 1070 complete and 0 interrupted iterations\nperfil   [  58% ] 12/30 VUs  1m44.0s/3m00.0s\n\nrunning (1m45.0s), 12/30 VUs, 1091 complete and 0 interrupted iterations\nperfil   [  58% ] 12/30 VUs  1m45.0s/3m00.0s\n\nrunning (1m46.0s), 12/30 VUs, 1114 complete and 0 interrupted iterations\nperfil   [  59% ] 12/30 VUs  1m46.0s/3m00.0s\n\nrunning (1m47.0s), 12/30 VUs, 1133 complete and 0 interrupted iterations\nperfil   [  59% ] 12/30 VUs  1m47.0s/3m00.0s\n\nrunning (1m48.0s), 12/30 VUs, 1155 complete and 0 interrupted iterations\nperfil   [  60% ] 12/30 VUs  1m48.0s/3m00.0s\n\nrunning (1m49.0s), 13/30 VUs, 1173 complete and 0 interrupted iterations\nperfil   [  61% ] 13/30 VUs  1m49.0s/3m00.0s\n\nrunning (1m50.0s), 13/30 VUs, 1195 complete and 0 interrupted iterations\nperfil   [  61% ] 13/30 VUs  1m50.0s/3m00.0s\n\nrunning (1m51.0s), 13/30 VUs, 1216 complete and 0 interrupted iterations\nperfil   [  62% ] 13/30 VUs  1m51.0s/3m00.0s\n\nrunning (1m52.0s), 13/30 VUs, 1237 complete and 0 interrupted iterations\nperfil   [  62% ] 13/30 VUs  1m52.0s/3m00.0s\n\nrunning (1m53.0s), 13/30 VUs, 1256 complete and 0 interrupted iterations\nperfil   [  63% ] 13/30 VUs  1m53.0s/3m00.0s\n\nrunning (1m54.0s), 13/30 VUs, 1276 complete and 0 interrupted iterations\nperfil   [  63% ] 13/30 VUs  1m54.0s/3m00.0s\n\nrunning (1m55.0s), 14/30 VUs, 1298 complete and 0 interrupted iterations\nperfil   [  64% ] 14/30 VUs  1m55.0s/3m00.0s\n\nrunning (1m56.0s), 14/30 VUs, 1322 complete and 0 interrupted iterations\nperfil   [  64% ] 14/30 VUs  1m56.0s/3m00.0s\n\nrunning (1m57.0s), 14/30 VUs, 1345 complete and 0 interrupted iterations\nperfil   [  65% ] 14/30 VUs  1m57.0s/3m00.0s\n\nrunning (1m58.0s), 14/30 VUs, 1368 complete and 0 interrupted iterations\nperfil   [  66% ] 14/30 VUs  1m58.0s/3m00.0s\n\nrunning (1m59.0s), 14/30 VUs, 1388 complete and 0 interrupted iterations\nperfil   [  66% ] 14/30 VUs  1m59.0s/3m00.0s\n\nrunning (2m00.0s), 14/30 VUs, 1413 complete and 0 interrupted iterations\nperfil   [  67% ] 14/30 VUs  2m00.0s/3m00.0s\n\nrunning (2m01.0s), 15/30 VUs, 1430 complete and 0 interrupted iterations\nperfil   [  67% ] 15/30 VUs  2m01.0s/3m00.0s\n\nrunning (2m02.0s), 15/30 VUs, 1455 complete and 0 interrupted iterations\nperfil   [  68% ] 15/30 VUs  2m02.0s/3m00.0s\n\nrunning (2m03.0s), 15/30 VUs, 1476 complete and 0 interrupted iterations\nperfil   [  68% ] 15/30 VUs  2m03.0s/3m00.0s\n\nrunning (2m04.0s), 15/30 VUs, 1501 complete and 0 interrupted iterations\nperfil   [  69% ] 15/30 VUs  2m04.0s/3m00.0s\n\nrunning (2m05.0s), 16/30 VUs, 1523 complete and 0 interrupted iterations\nperfil   [  69% ] 16/30 VUs  2m05.0s/3m00.0s\n\nrunning (2m06.0s), 16/30 VUs, 1547 complete and 0 interrupted iterations\nperfil   [  70% ] 16/30 VUs  2m06.0s/3m00.0s\n\nrunning (2m07.0s), 16/30 VUs, 1570 complete and 0 interrupted iterations\nperfil   [  71% ] 16/30 VUs  2m07.0s/3m00.0s\n\nrunning (2m08.0s), 16/30 VUs, 1594 complete and 0 interrupted iterations\nperfil   [  71% ] 16/30 VUs  2m08.0s/3m00.0s\n\nrunning (2m09.0s), 17/30 VUs, 1615 complete and 0 interrupted iterations\nperfil   [  72% ] 17/30 VUs  2m09.0s/3m00.0s\n\nrunning (2m10.0s), 17/30 VUs, 1637 complete and 0 interrupted iterations\nperfil   [  72% ] 17/30 VUs  2m10.0s/3m00.0s\n\nrunning (2m11.0s), 17/30 VUs, 1658 complete and 0 interrupted iterations\nperfil   [  73% ] 17/30 VUs  2m11.0s/3m00.0s\n\nrunning (2m12.0s), 17/30 VUs, 1681 complete and 0 interrupted iterations\nperfil   [  73% ] 17/30 VUs  2m12.0s/3m00.0s\n\nrunning (2m13.0s), 18/30 VUs, 1701 complete and 0 interrupted iterations\nperfil   [  74% ] 18/30 VUs  2m13.0s/3m00.0s\n\nrunning (2m14.0s), 18/30 VUs, 1725 complete and 0 interrupted iterations\nperfil   [  74% ] 18/30 VUs  2m14.0s/3m00.0s\n\nrunning (2m15.0s), 18/30 VUs, 1747 complete and 0 interrupted iterations\nperfil   [  75% ] 18/30 VUs  2m15.0s/3m00.0s\n\nrunning (2m16.0s), 18/30 VUs, 1769 complete and 0 interrupted iterations\nperfil   [  76% ] 18/30 VUs  2m16.0s/3m00.0s\n\nrunning (2m17.0s), 19/30 VUs, 1790 complete and 0 interrupted iterations\nperfil   [  76% ] 19/30 VUs  2m17.0s/3m00.0s\n\nrunning (2m18.0s), 19/30 VUs, 1811 complete and 0 interrupted iterations\nperfil   [  77% ] 19/30 VUs  2m18.0s/3m00.0s\n\nrunning (2m19.0s), 19/30 VUs, 1834 complete and 0 interrupted iterations\nperfil   [  77% ] 19/30 VUs  2m19.0s/3m00.0s\n\nrunning (2m20.0s), 19/30 VUs, 1853 complete and 0 interrupted iterations\nperfil   [  78% ] 19/30 VUs  2m20.0s/3m00.0s\n\nrunning (2m21.0s), 20/30 VUs, 1870 complete and 0 interrupted iterations\nperfil   [  78% ] 20/30 VUs  2m21.0s/3m00.0s\n\nrunning (2m22.0s), 20/30 VUs, 1884 complete and 0 interrupted iterations\nperfil   [  79% ] 20/30 VUs  2m22.0s/3m00.0s\n\nrunning (2m23.0s), 20/30 VUs, 1903 complete and 0 interrupted iterations\nperfil   [  79% ] 20/30 VUs  2m23.0s/3m00.0s\n\nrunning (2m24.0s), 20/30 VUs, 1925 complete and 0 interrupted iterations\nperfil   [  80% ] 20/30 VUs  2m24.0s/3m00.0s\n\nrunning (2m25.0s), 21/30 VUs, 1946 complete and 0 interrupted iterations\nperfil   [  81% ] 21/30 VUs  2m25.0s/3m00.0s\n\nrunning (2m26.0s), 21/30 VUs, 1967 complete and 0 interrupted iterations\nperfil   [  81% ] 21/30 VUs  2m26.0s/3m00.0s\n\nrunning (2m27.0s), 21/30 VUs, 1989 complete and 0 interrupted iterations\nperfil   [  82% ] 21/30 VUs  2m27.0s/3m00.0s\n\nrunning (2m28.0s), 21/30 VUs, 2008 complete and 0 interrupted iterations\nperfil   [  82% ] 21/30 VUs  2m28.0s/3m00.0s\n\nrunning (2m29.0s), 22/30 VUs, 2032 complete and 0 interrupted iterations\nperfil   [  83% ] 22/30 VUs  2m29.0s/3m00.0s\n\nrunning (2m30.0s), 22/30 VUs, 2056 complete and 0 interrupted iterations\nperfil   [  83% ] 22/30 VUs  2m30.0s/3m00.0s\n\nrunning (2m31.0s), 22/30 VUs, 2077 complete and 0 interrupted iterations\nperfil   [  84% ] 22/30 VUs  2m31.0s/3m00.0s\n\nrunning (2m32.0s), 22/30 VUs, 2101 complete and 0 interrupted iterations\nperfil   [  84% ] 22/30 VUs  2m32.0s/3m00.0s\n\nrunning (2m33.0s), 23/30 VUs, 2120 complete and 0 interrupted iterations\nperfil   [  85% ] 23/30 VUs  2m33.0s/3m00.0s\n\nrunning (2m34.0s), 23/30 VUs, 2143 complete and 0 interrupted iterations\nperfil   [  86% ] 23/30 VUs  2m34.0s/3m00.0s\n\nrunning (2m35.0s), 23/30 VUs, 2163 complete and 0 interrupted iterations\nperfil   [  86% ] 23/30 VUs  2m35.0s/3m00.0s\n\nrunning (2m36.0s), 23/30 VUs, 2183 complete and 0 interrupted iterations\nperfil   [  87% ] 23/30 VUs  2m36.0s/3m00.0s\n\nrunning (2m37.0s), 24/30 VUs, 2203 complete and 0 interrupted iterations\nperfil   [  87% ] 24/30 VUs  2m37.0s/3m00.0s\n\nrunning (2m38.0s), 24/30 VUs, 2229 complete and 0 interrupted iterations\nperfil   [  88% ] 24/30 VUs  2m38.0s/3m00.0s\n\nrunning (2m39.0s), 24/30 VUs, 2250 complete and 0 interrupted iterations\nperfil   [  88% ] 24/30 VUs  2m39.0s/3m00.0s\n\nrunning (2m40.0s), 24/30 VUs, 2270 complete and 0 interrupted iterations\nperfil   [  89% ] 24/30 VUs  2m40.0s/3m00.0s\n\nrunning (2m41.0s), 25/30 VUs, 2289 complete and 0 interrupted iterations\nperfil   [  89% ] 25/30 VUs  2m41.0s/3m00.0s\n\nrunning (2m42.0s), 25/30 VUs, 2305 complete and 0 interrupted iterations\nperfil   [  90% ] 25/30 VUs  2m42.0s/3m00.0s\n\nrunning (2m43.0s), 25/30 VUs, 2322 complete and 0 interrupted iterations\nperfil   [  91% ] 25/30 VUs  2m43.0s/3m00.0s\n\nrunning (2m44.0s), 25/30 VUs, 2339 complete and 0 interrupted iterations\nperfil   [  91% ] 25/30 VUs  2m44.0s/3m00.0s\n\nrunning (2m45.0s), 26/30 VUs, 2358 complete and 0 interrupted iterations\nperfil   [  92% ] 26/30 VUs  2m45.0s/3m00.0s\n\nrunning (2m46.0s), 26/30 VUs, 2378 complete and 0 interrupted iterations\nperfil   [  92% ] 26/30 VUs  2m46.0s/3m00.0s\n\nrunning (2m47.0s), 26/30 VUs, 2394 complete and 0 interrupted iterations\nperfil   [  93% ] 26/30 VUs  2m47.0s/3m00.0s\n\nrunning (2m48.0s), 26/30 VUs, 2417 complete and 0 interrupted iterations\nperfil   [  93% ] 26/30 VUs  2m48.0s/3m00.0s\n\nrunning (2m49.0s), 27/30 VUs, 2436 complete and 0 interrupted iterations\nperfil   [  94% ] 27/30 VUs  2m49.0s/3m00.0s\n\nrunning (2m50.0s), 27/30 VUs, 2448 complete and 0 interrupted iterations\nperfil   [  94% ] 27/30 VUs  2m50.0s/3m00.0s\n\nrunning (2m51.0s), 27/30 VUs, 2458 complete and 0 interrupted iterations\nperfil   [  95% ] 27/30 VUs  2m51.0s/3m00.0s\n\nrunning (2m52.0s), 27/30 VUs, 2469 complete and 0 interrupted iterations\nperfil   [  96% ] 27/30 VUs  2m52.0s/3m00.0s\n\nrunning (2m53.0s), 28/30 VUs, 2484 complete and 0 interrupted iterations\nperfil   [  96% ] 28/30 VUs  2m53.0s/3m00.0s\n\nrunning (2m54.0s), 28/30 VUs, 2511 complete and 0 interrupted iterations\nperfil   [  97% ] 28/30 VUs  2m54.0s/3m00.0s\n\nrunning (2m55.0s), 28/30 VUs, 2533 complete and 0 interrupted iterations\nperfil   [  97% ] 28/30 VUs  2m55.0s/3m00.0s\n\nrunning (2m56.0s), 28/30 VUs, 2555 complete and 0 interrupted iterations\nperfil   [  98% ] 28/30 VUs  2m56.0s/3m00.0s\n\nrunning (2m57.0s), 29/30 VUs, 2580 complete and 0 interrupted iterations\nperfil   [  98% ] 29/30 VUs  2m57.0s/3m00.0s\n\nrunning (2m58.0s), 29/30 VUs, 2606 complete and 0 interrupted iterations\nperfil   [  99% ] 29/30 VUs  2m58.0s/3m00.0s\n\nrunning (2m59.0s), 29/30 VUs, 2626 complete and 0 interrupted iterations\nperfil   [  99% ] 29/30 VUs  2m59.0s/3m00.0s\n\nrunning (3m00.0s), 29/30 VUs, 2653 complete and 0 interrupted iterations\nperfil   [ 100% ] 29/30 VUs  3m00.0s/3m00.0s\n\nrunning (3m01.0s), 08/30 VUs, 2674 complete and 0 interrupted iterations\nperfil ↓ [ 100% ] 29/30 VUs  3m0s\n\n\n  █ THRESHOLDS \n\n    http_req_duration\n    ✗ 'p(95)<1511' p(95)=3.42s\n\n    http_req_failed\n    ✓ 'rate<0.01' rate=0.00%\n\n\n  █ TOTAL RESULTS \n\n    checks_total.......: 2682    14.805219/s\n    checks_succeeded...: 100.00% 2682 out of 2682\n    checks_failed......: 0.00%   0 out of 2682\n\n    ✓ status 200\n\n    HTTP\n    http_req_duration..............: avg=753.99ms min=330.9ms med=399.78ms max=5.94s p(90)=1.94s p(95)=3.42s p(99)=4.59s\n      { expected_response:true }...: avg=753.99ms min=330.9ms med=399.78ms max=5.94s p(90)=1.94s p(95)=3.42s p(99)=4.59s\n    http_req_failed................: 0.00%  0 out of 2682\n    http_reqs......................: 2682   14.805219/s\n\n    EXECUTION\n    iteration_duration.............: avg=756.11ms min=331.1ms med=400.72ms max=5.94s p(90)=1.94s p(95)=3.42s p(99)=4.59s\n    iterations.....................: 2682   14.805219/s\n    vus............................: 8      min=0         max=29\n    vus_max........................: 30     min=30        max=30\n\n    NETWORK\n    data_received..................: 4.1 MB 23 kB/s\n    data_sent......................: 199 kB 1.1 kB/s\n\n\n\n\nrunning (3m01.2s), 00/30 VUs, 2682 complete and 0 interrupted iterations\nperfil ✓ [ 100% ] 00/30 VUs  3m0s\nFin 2026-11-14T17:57:17Z, código de k6: 99\n",
+        "stderr": "time=\"2026-11-14T17:57:17Z\" level=error msg=\"thresholds on metrics 'http_req_duration' have been crossed\"\n"
+      },
+      "start": "2026-11-14T17:54:11.851051+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:57:17.555739+00:00",
+      "duration": 185.704688
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "saturar-la-cpu-de-un-pod",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "saturar",
+            "${segundos_de_consumo}",
+            "0"
+          ],
+          "timeout": 60
+        },
+        "pauses": {
+          "after": 20
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "Saturando la CPU del pod statsnostra-api-6b65ff5885-lg4k2 durante 180s\n{\"activo\":true,\"segundos_restantes\":180.0}  [HTTP 200]\n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:54:11.851051+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:54:14.971440+00:00",
+      "duration": 3.120389
+    },
+    {
+      "activity": {
+        "type": "probe",
+        "name": "consumo-de-cada-pod-durante-la-ventana",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "estado"
+          ],
+          "timeout": 60
+        },
+        "pauses": {
+          "after": 165
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "statsnostra-api-6b65ff5885-lg4k2: {\"activo\":true,\"segundos_restantes\":156.4}  [HTTP 200]\nstatsnostra-api-6b65ff5885-w8k7f: {\"activo\":false,\"segundos_restantes\":0.0}  [HTTP 200]\nstatsnostra-api-6b65ff5885-lg4k2   130m   89Mi   \nstatsnostra-api-6b65ff5885-w8k7f   22m    91Mi   \n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:54:34.972816+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:54:41.290630+00:00",
+      "duration": 6.317814
+    },
+    {
+      "activity": {
+        "type": "probe",
+        "name": "veredicto-de-la-hipotesis",
+        "provider": {
+          "type": "process",
+          "path": "python",
+          "arguments": [
+            "caos/carga/veredicto.py",
+            "${carpeta}/corrida-1.json",
+            "--esperar",
+            "120"
+          ],
+          "timeout": 180
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "{\"cumple\": false, \"motivos\": [\"p95 3425 ms > X 1511 ms\"], \"exito\": 1, \"exito_minimo\": 0.99, \"p95_ms\": 3425.3, \"x_ms\": 1511, \"sobre_x_pct\": 126.7, \"peticiones\": 2682, \"p95_estado_estable_ms\": 1208.5, \"variacion_p95_pct\": 183.4}\r\n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:57:26.291827+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:57:26.471289+00:00",
+      "duration": 0.179462
+    }
+  ],
+  "rollbacks": [
+    {
+      "activity": {
+        "type": "action",
+        "name": "detener-el-consumo-en-todos-los-pods",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "detener"
+          ],
+          "timeout": 120
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "statsnostra-api-6b65ff5885-lg4k2: {\"activo\":false,\"segundos_restantes\":0.0}  [HTTP 200]\nstatsnostra-api-6b65ff5885-w8k7f: {\"activo\":false,\"segundos_restantes\":0.0}  [HTTP 200]\n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:58:18.236059+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:58:23.438612+00:00",
+      "duration": 5.202553
+    },
+    {
+      "activity": {
+        "type": "action",
+        "name": "apagar-el-interruptor-de-fallos",
+        "provider": {
+          "type": "process",
+          "path": "bash",
+          "arguments": [
+            "caos/acciones/cpu.sh",
+            "deshabilitar"
+          ],
+          "timeout": 300
+        }
+      },
+      "output": {
+        "status": 0,
+        "stdout": "Waiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 out of 2 new replicas have been updated...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"statsnostra-api\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"statsnostra-api\" successfully rolled out\nFAULT_HEADER_ENABLED=false\n",
+        "stderr": ""
+      },
+      "start": "2026-11-14T17:58:23.438612+00:00",
+      "status": "succeeded",
+      "end": "2026-11-14T17:59:11.749969+00:00",
+      "duration": 48.311357
+    }
+  ],
+  "end": "2026-11-14T17:59:11.751047+00:00",
+  "duration": 353.6787180900574
+}

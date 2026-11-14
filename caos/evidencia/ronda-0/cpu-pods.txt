@@ -1,0 +1,12 @@
+2026-11-14T17:54:15Z statsnostra-api-6b65ff5885-lg4k2=261m statsnostra-api-6b65ff5885-w8k7f=8m 
+2026-11-14T17:54:35Z statsnostra-api-6b65ff5885-lg4k2=261m statsnostra-api-6b65ff5885-w8k7f=8m 
+2026-11-14T17:54:55Z statsnostra-api-6b65ff5885-lg4k2=130m statsnostra-api-6b65ff5885-w8k7f=22m 
+2026-11-14T17:55:14Z statsnostra-api-6b65ff5885-lg4k2=250m statsnostra-api-6b65ff5885-w8k7f=137m 
+2026-11-14T17:55:34Z statsnostra-api-6b65ff5885-lg4k2=250m statsnostra-api-6b65ff5885-w8k7f=137m 
+2026-11-14T17:55:54Z statsnostra-api-6b65ff5885-lg4k2=251m statsnostra-api-6b65ff5885-w8k7f=259m 
+2026-11-14T17:56:15Z statsnostra-api-6b65ff5885-lg4k2=260m statsnostra-api-6b65ff5885-w8k7f=271m 
+2026-11-14T17:56:36Z statsnostra-api-6b65ff5885-lg4k2=260m statsnostra-api-6b65ff5885-w8k7f=271m 
+2026-11-14T17:56:57Z statsnostra-api-6b65ff5885-lg4k2=265m statsnostra-api-6b65ff5885-w8k7f=304m 
+2026-11-14T17:57:19Z statsnostra-api-6b65ff5885-lg4k2=276m statsnostra-api-6b65ff5885-w8k7f=270m 
+2026-11-14T17:57:38Z statsnostra-api-6b65ff5885-lg4k2=276m statsnostra-api-6b65ff5885-w8k7f=270m 
+2026-11-14T17:57:57Z statsnostra-api-6b65ff5885-lg4k2=163m statsnostra-api-6b65ff5885-w8k7f=117m 
