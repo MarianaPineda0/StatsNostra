@@ -13,6 +13,9 @@ Cada acción queda en la [bitácora](bitacora.md).
 | [`inventario-controles.md`](inventario-controles.md) | Controles por capa, con lo que hay hoy y los huecos |
 | [`deteccion/`](deteccion/) | Reglas de detección como código, con casos positivos y negativos |
 | [`bitacora.md`](bitacora.md) | Registro de cada acción durante las ventanas |
+| [`resultados.md`](resultados.md) | Tabla de las dos rondas (MTTD, MTTC, bloqueos), generada con `resumen.py` |
+| [`acciones/`](acciones/exposicion.sh), [`mejoras/`](mejoras/) | Scripts del experimento, la alerta y la NetworkPolicy de la ronda 1 |
+| [`evidencia/`](evidencia/) | Medición de la línea base y resultado de cada ronda |
 
 ## Capas, puntos de inyección y telemetría
 
