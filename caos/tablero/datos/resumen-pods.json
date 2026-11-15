@@ -1,0 +1,141 @@
+{
+  "ronda0": {
+    "pod_saturado": "statsnostra-api-6b65ff5885-lg4k2",
+    "llamadas": 5364,
+    "errores_5xx": 0,
+    "pods": [
+      {
+        "pod": "statsnostra-api-6b65ff5885-lg4k2",
+        "rol": "saturado",
+        "llamadas": 732,
+        "parte": 0.13646532438478748,
+        "p50_ms": 1490.2,
+        "p95_ms": 2615.2,
+        "p99_ms": 2992.7
+      },
+      {
+        "pod": "statsnostra-api-6b65ff5885-w8k7f",
+        "rol": "sano",
+        "llamadas": 4632,
+        "parte": 0.8635346756152126,
+        "p50_ms": 20.9,
+        "p95_ms": 110.1,
+        "p99_ms": 214.6
+      }
+    ],
+    "reparto_por_minuto": [
+      {
+        "minuto": 0,
+        "llamadas": 647,
+        "parte_saturado": 0.0
+      },
+      {
+        "minuto": 1,
+        "llamadas": 2142,
+        "parte_saturado": 0.07983193277310924
+      },
+      {
+        "minuto": 2,
+        "llamadas": 2478,
+        "parte_saturado": 0.20056497175141244
+      },
+      {
+        "minuto": 3,
+        "llamadas": 97,
+        "parte_saturado": 0.6597938144329897
+      }
+    ]
+  },
+  "ronda1": {
+    "pod_saturado": "statsnostra-api-7b87d7666b-k6lp6",
+    "llamadas": 8528,
+    "errores_5xx": 0,
+    "pods": [
+      {
+        "pod": "statsnostra-api-7b87d7666b-k6lp6",
+        "rol": "saturado",
+        "llamadas": 433,
+        "parte": 0.05077392120075047,
+        "p50_ms": 271.8,
+        "p95_ms": 568.7,
+        "p99_ms": 703.6
+      },
+      {
+        "pod": "statsnostra-api-7b87d7666b-dmzvw",
+        "rol": "sano",
+        "llamadas": 1950,
+        "parte": 0.22865853658536586,
+        "p50_ms": 17.8,
+        "p95_ms": 43.1,
+        "p99_ms": 89.2
+      },
+      {
+        "pod": "statsnostra-api-7b87d7666b-m55bc",
+        "rol": "sano",
+        "llamadas": 3374,
+        "parte": 0.3956378986866792,
+        "p50_ms": 17.3,
+        "p95_ms": 32.9,
+        "p99_ms": 58.0
+      },
+      {
+        "pod": "statsnostra-api-7b87d7666b-v6kvj",
+        "rol": "sano",
+        "llamadas": 2771,
+        "parte": 0.3249296435272045,
+        "p50_ms": 16.9,
+        "p95_ms": 28.0,
+        "p99_ms": 61.4
+      }
+    ],
+    "reparto_por_minuto": [
+      {
+        "minuto": 0,
+        "llamadas": 629,
+        "parte_saturado": 0.0
+      },
+      {
+        "minuto": 1,
+        "llamadas": 2894,
+        "parte_saturado": 0.04906703524533518
+      },
+      {
+        "minuto": 2,
+        "llamadas": 4872,
+        "parte_saturado": 0.05972906403940887
+      },
+      {
+        "minuto": 3,
+        "llamadas": 133,
+        "parte_saturado": 0.0
+      }
+    ]
+  },
+  "traza": {
+    "id": "k6-1-134",
+    "ronda0": [
+      {
+        "ruta": "/api/v1/partidos",
+        "rol": "saturado",
+        "ms": 2399.1
+      },
+      {
+        "ruta": "/api/v1/predicciones",
+        "rol": "saturado",
+        "ms": 3704.4
+      }
+    ],
+    "ronda1": [
+      {
+        "ruta": "/api/v1/partidos",
+        "rol": "sano",
+        "ms": 18.8
+      },
+      {
+        "ruta": "/api/v1/predicciones",
+        "rol": "sano",
+        "ms": 17.6
+      }
+    ]
+  }
+}

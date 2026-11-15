@@ -1,14 +1,13 @@
-"""Dibuja el tablero de las dos rondas del experimento de agotamiento de CPU.
+"""Dibuja las gráficas del experimento de CPU a partir de la evidencia del repositorio.
 
-Un panel por métrica y una columna por ronda, con el eje en minutos desde que
-arrancó el fallo, para que las dos rondas se lean una sobre la otra. La franja
-sombreada es la ventana de inyección (180 s). Lee solo archivos del repositorio:
-la evidencia de cada ronda y los datos de datos/.
+Escribe en esta carpeta resultados.png, tablero.png y reparto.png. No hay ningún número
+escrito a mano: todo sale de evidencia/ y de datos/ (ver README.md de esta carpeta).
 
-Uso: python caos/tablero/dibujar.py   (escribe tablero.png y comparacion.png aquí)
+Uso: python caos/tablero/dibujar.py
 """
 import csv
 import json
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,132 +18,178 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent
 EVIDENCIA = RAIZ.parent / "evidencia"
-ROJO, AZUL, GRIS = "#D55E00", "#0072B2", "#8A8A8A"
-RONDAS = {
-    "0": {"titulo": "Ronda 0: sin mejoras", "limite_cpu": 250},
-    "1": {"titulo": "Ronda 1: con mejoras", "limite_cpu": 500},
-}
+
+AZUL, NARANJA, GRIS = "#2a78d6", "#eb6834", "#8a8a85"
+TINTA, TINTA_SUAVE, FONDO = "#0b0b0b", "#52514e", "#fcfcfb"
+
+plt.rcParams.update({
+    "font.family": "DejaVu Sans", "font.size": 9, "text.color": TINTA, "axes.labelcolor": TINTA_SUAVE,
+    "xtick.color": TINTA_SUAVE, "ytick.color": TINTA_SUAVE, "axes.edgecolor": "#c9c8c2",
+    "figure.facecolor": FONDO, "axes.facecolor": FONDO, "savefig.facecolor": FONDO,
+    "axes.spines.top": False, "axes.spines.right": False,
+})
+
+
+def miles(n: float) -> str:
+    return f"{n:,.0f}".replace(",", ".")
 
 
 def hora(texto: str) -> float:
     return datetime.fromisoformat(texto.replace("Z", "+00:00")).replace(tzinfo=timezone.utc).timestamp()
 
 
-def cargar(ronda: str) -> dict:
-    inyeccion = json.loads((RAIZ / "datos" / f"inyeccion-ronda{ronda}.json").read_text(encoding="utf-8"))
-    inicio = hora(inyeccion["inicio_utc"])
-    saturado = inyeccion["pod_saturado"]
+def json_de(ruta: Path) -> dict:
+    return json.loads(ruta.read_text(encoding="utf-8"))
 
+
+def cargar_ronda(r: str) -> dict:
+    iny = json_de(RAIZ / "datos" / f"inyeccion-ronda{r}.json")
+    inicio, saturado = hora(iny["inicio_utc"]), iny["pod_saturado"]
     servidor = {}
-    for f in csv.DictReader(open(RAIZ / "datos" / f"servidor-ronda{ronda}.csv", encoding="utf-8")):
+    for f in csv.DictReader(open(RAIZ / "datos" / f"servidor-ronda{r}.csv", encoding="utf-8")):
         servidor.setdefault(f["pod"], []).append(((hora(f["ventana_utc"]) - inicio) / 60, float(f["p95_ms"])))
-
     lag = {}
-    for f in csv.DictReader(open(EVIDENCIA / f"ronda-{ronda}" / "lag-pods.csv", encoding="utf-8")):
+    for f in csv.DictReader(open(EVIDENCIA / f"ronda-{r}" / "lag-pods.csv", encoding="utf-8")):
         if f["lag_ms"] != "NA":
             lag.setdefault(f["pod"], []).append(((hora(f["timestamp_utc"]) - inicio) / 60, float(f["lag_ms"])))
-
-    cpu = {}
-    for linea in (EVIDENCIA / f"ronda-{ronda}" / "cpu-pods.txt").read_text(encoding="utf-8").splitlines():
+    cpu, pods_por_muestra = {}, []
+    for linea in (EVIDENCIA / f"ronda-{r}" / "cpu-pods.txt").read_text(encoding="utf-8").splitlines():
         partes = linea.split()
         if not partes:
             continue
         minuto = (hora(partes[0]) - inicio) / 60
+        pods_por_muestra.append((minuto, len(partes) - 1))
         for par in partes[1:]:
             pod, valor = par.split("=")
             cpu.setdefault(pod, []).append((minuto, float(valor.rstrip("m"))))
-    return {"saturado": saturado, "servidor": servidor, "lag": lag, "cpu": cpu}
+    return {"saturado": saturado, "servidor": servidor, "lag": lag, "cpu": cpu, "pods": pods_por_muestra,
+            "duracion_min": iny["duracion_s"] / 60}
 
 
-def trazar(ax, series: dict, saturado: str) -> None:
-    sanos = [p for p in series if p != saturado]
-    for i, pod in enumerate(sorted(sanos)):
+def resumen_k6(r: str) -> dict:
+    m = json_de(EVIDENCIA / f"ronda-{r}" / "corrida-1.json")["metrics"]
+    d = m["http_req_duration"]
+    return {"p50": d["med"], "p95": d["p(95)"], "p99": d["p(99)"], "flujos": m["http_reqs"]["count"]}
+
+
+def estable() -> dict:
+    e = json_de(EVIDENCIA / "estado-estable" / "estado-estable.json")
+    return {"p95": e["mediana"]["p95_ms"], "x": e["x_ms"],
+            "flujos": statistics.median(c["peticiones"] for c in e["detalle"])}
+
+
+def etiqueta_directa(ax, x, y, texto, **kw):
+    ax.text(x, y, texto, ha=kw.pop("ha", "left"), va=kw.pop("va", "center"), fontsize=kw.pop("fontsize", 9), **kw)
+
+
+def resultados() -> None:
+    est, r0, r1 = estable(), resumen_k6("0"), resumen_k6("1")
+    nombres = ["Estado estable", "Ronda 0\n(sin mejoras)", "Ronda 1\n(con mejoras)"]
+    colores = [GRIS, NARANJA, AZUL]
+    fig, (a, b) = plt.subplots(1, 2, figsize=(9.6, 3.1), gridspec_kw={"width_ratios": [1.25, 1]})
+
+    p95 = [est["p95"], r0["p95"], r1["p95"]]
+    a.barh(nombres[::-1], p95[::-1], color=colores[::-1], height=0.58)
+    a.axvline(est["x"], color=TINTA, ls="--", lw=1, zorder=0)
+    etiqueta_directa(a, est["x"] + 40, 0.5, f"límite {miles(est['x'])} ms", fontsize=8, color=TINTA_SUAVE)
+    for i, v in enumerate(p95[::-1]):
+        etiqueta_directa(a, v + 50, i, f"{miles(v)} ms", fontweight="bold",
+                         bbox=dict(facecolor=FONDO, edgecolor="none", pad=1.5))
+    a.set_xlim(0, max(p95) * 1.22)
+    a.set_title("Latencia p95 del flujo", loc="left", fontsize=10, fontweight="bold")
+    a.tick_params(axis="y", length=0)
+    a.set_xlabel("milisegundos, medido con k6")
+
+    flujos = [est["flujos"], r0["flujos"], r1["flujos"]]
+    b.bar(range(3), flujos, color=colores, width=0.58)
+    for i, v in enumerate(flujos):
+        etiqueta_directa(b, i, v + max(flujos) * 0.03, miles(v), ha="center", fontweight="bold")
+    b.set_xticks(range(3), ["Estable", "Ronda 0", "Ronda 1"])
+    b.set_ylim(0, max(flujos) * 1.18)
+    b.set_title("Flujos completados en la prueba", loc="left", fontsize=10, fontweight="bold")
+    b.tick_params(axis="x", length=0)
+    fig.tight_layout()
+    fig.savefig(RAIZ / "resultados.png", dpi=170)
+    plt.close(fig)
+
+
+def trazar(ax, series, saturado, etiquetar=False):
+    sanos = sorted(p for p in series if p != saturado)
+    for i, pod in enumerate(sanos):
         x, y = zip(*series[pod])
-        ax.plot(x, y, color=AZUL, alpha=0.35 + 0.5 * (i + 1) / max(len(sanos), 1), lw=1.4,
-                label="pod sano" if i == 0 else None)
+        ax.plot(x, y, color=AZUL, alpha=0.9 - 0.2 * i if len(sanos) > 1 else 0.9, lw=1.3,
+                label="pods sanos" if (etiquetar and i == 0) else None)
     if saturado in series:
         x, y = zip(*series[saturado])
-        ax.plot(x, y, color=ROJO, lw=2.2, label="pod saturado")
+        ax.plot(x, y, color=NARANJA, lw=2.2, label="pod saturado" if etiquetar else None)
 
 
 def tablero() -> None:
-    datos = {r: cargar(r) for r in RONDAS}
-    fig, ejes = plt.subplots(3, 2, figsize=(12, 9), sharex=True, constrained_layout=True)
-    filas = [
-        ("servidor", "p95 del API de negocio por pod\n(ms, ventanas de 10 s)", None),
-        ("lag", "Retraso del bucle de eventos\n(ms)", 50),
-        ("cpu", "CPU por pod\n(milicores)", None),
-    ]
-    for c, (ronda, info) in enumerate(RONDAS.items()):
-        d = datos[ronda]
-        for f, (clave, etiqueta, umbral) in enumerate(filas):
+    rondas = {"0": "Ronda 0, sin mejoras", "1": "Ronda 1, con mejoras"}
+    limites = {"0": 250, "1": 500}
+    datos = {r: cargar_ronda(r) for r in rondas}
+    fig, ejes = plt.subplots(3, 2, figsize=(10.2, 7.6), sharex=True)
+    filas = [("servidor", "p95 que ve el servidor (ms)"), ("lag", "retraso del bucle (ms)"),
+             ("cpu", "CPU por pod (milicores)")]
+    for c, r in enumerate(rondas):
+        d = datos[r]
+        for f, (clave, etiqueta) in enumerate(filas):
             ax = ejes[f][c]
-            ax.axvspan(0, 3, color=ROJO, alpha=0.08, lw=0)
-            trazar(ax, d[clave], d["saturado"])
-            if clave == "cpu":
-                ax.axhline(info["limite_cpu"], color=GRIS, ls="--", lw=1)
-                ax.text(4.45, info["limite_cpu"], f"límite {info['limite_cpu']}m", ha="right", va="bottom", color=GRIS, fontsize=8)
-            if clave == "lag" and ronda == "1":
-                ax.axhline(umbral, color=GRIS, ls="--", lw=1)
-                ax.text(4.45, umbral, "umbral de readiness 50 ms", ha="right", va="bottom", color=GRIS, fontsize=8)
+            ax.axvspan(0, d["duracion_min"], color=NARANJA, alpha=0.08, lw=0)
+            trazar(ax, d[clave], d["saturado"], etiquetar=(f == 0 and c == 0))
+            ax.grid(axis="y", alpha=0.25)
+            ax.set_xlim(-0.1, 4.4)
             if c == 0:
-                ax.set_ylabel(etiqueta, fontsize=9)
-            ax.grid(alpha=0.25)
-            ax.set_xlim(-0.2, 4.5)
-            for lado in ("top", "right"):
-                ax.spines[lado].set_visible(False)
-        ejes[0][c].set_title(info["titulo"], fontsize=11, fontweight="bold")
-        ejes[2][c].set_xlabel("minutos desde el inicio del fallo (franja = 180 s de CPU saturada)", fontsize=9)
-    # Mismo eje vertical en las dos rondas para poder compararlas a simple vista
+                ax.set_ylabel(etiqueta, fontsize=8.5)
+        ejes[2][c].axhline(limites[r], color=TINTA_SUAVE, ls="--", lw=1)
+        etiqueta_directa(ejes[2][c], 4.35, limites[r], f"límite {limites[r]}m", ha="right", va="bottom",
+                         fontsize=8, color=TINTA_SUAVE)
+        if r == "1":
+            ejes[1][c].axhline(50, color=TINTA_SUAVE, ls="--", lw=1)
+            etiqueta_directa(ejes[1][c], 4.35, 50, "umbral 50 ms", ha="right", va="bottom",
+                             fontsize=8, color=TINTA_SUAVE)
+            sube = next((m for m, n in d["pods"] if n > 2), None)
+            if sube is not None:
+                ejes[2][c].annotate("el HPA suma réplicas", xy=(sube, 0), xytext=(sube + 0.25, 40),
+                                    fontsize=8, color=TINTA_SUAVE,
+                                    arrowprops=dict(arrowstyle="-", color=TINTA_SUAVE, lw=0.8))
+        ejes[0][c].set_title(rondas[r], loc="left", fontsize=10, fontweight="bold")
+        ejes[2][c].set_xlabel("minutos desde que empezó el fallo (zona naranja: CPU saturada)", fontsize=8.5)
     for f in range(3):
         techo = max(ejes[f][0].get_ylim()[1], ejes[f][1].get_ylim()[1])
         ejes[f][0].set_ylim(0, techo)
         ejes[f][1].set_ylim(0, techo)
-    ejes[0][0].legend(loc="upper left", fontsize=8, frameon=False)
-    fig.suptitle("Agotamiento de CPU de un pod del API de Mari en GKE", fontsize=13, fontweight="bold")
-    fig.savefig(RAIZ / "tablero.png", dpi=130)
+    ejes[0][0].legend(loc="upper left", frameon=False, fontsize=8.5)
+    fig.tight_layout()
+    fig.savefig(RAIZ / "tablero.png", dpi=150)
     plt.close(fig)
 
 
-def resumen(ronda: str) -> dict:
-    m = json.loads((EVIDENCIA / f"ronda-{ronda}" / "corrida-1.json").read_text(encoding="utf-8"))["metrics"]
-    d = m["http_req_duration"]
-    return {"p50": d["med"], "p95": d["p(95)"], "p99": d["p(99)"], "max": d["max"],
-            "exito": 100 * (1 - m["http_req_failed"]["value"]), "peticiones": m["http_reqs"]["count"]}
-
-
-def comparacion() -> None:
-    estable = json.loads((EVIDENCIA / "estado-estable" / "estado-estable.json").read_text(encoding="utf-8"))
-    base = estable["mediana"]
-    r0, r1 = resumen("0"), resumen("1")
-    fig, ax = plt.subplots(figsize=(8, 4.2), constrained_layout=True)
-    etiquetas = ["p50", "p95", "p99"]
-    valores = {
-        "Estado estable": [base["p50_ms"], base["p95_ms"], base["p99_ms"]],
-        "Ronda 0 (sin mejoras)": [r0["p50"], r0["p95"], r0["p99"]],
-        "Ronda 1 (con mejoras)": [r1["p50"], r1["p95"], r1["p99"]],
-    }
-    colores = [GRIS, ROJO, AZUL]
-    ancho = 0.26
-    for i, ((nombre, v), color) in enumerate(zip(valores.items(), colores)):
-        pos = [k + (i - 1) * ancho for k in range(3)]
-        barras = ax.bar(pos, v, ancho, label=nombre, color=color)
-        for b, y in zip(barras, v):
-            ax.text(b.get_x() + b.get_width() / 2, y + 40, f"{y:.0f}", ha="center", fontsize=8)
-    ax.axhline(estable["x_ms"], color="black", ls="--", lw=1)
-    ax.text(-0.45, estable["x_ms"] + 40, f"X = {estable['x_ms']} ms (p95 máximo aceptado)", ha="left", fontsize=8)
-    ax.set_xticks(range(3), etiquetas)
-    ax.set_ylabel("Latencia del flujo medida con k6 (ms)")
-    ax.set_title("Latencia del flujo: estado estable y las dos rondas", fontsize=11, fontweight="bold")
-    ax.legend(frameon=False, fontsize=8, loc="upper left")
+def reparto() -> None:
+    res = json_de(RAIZ / "datos" / "resumen-pods.json")
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
+    ancho = 0.36
+    for desplaza, r, color, nombre in ((-ancho / 2, "ronda0", NARANJA, "Ronda 0"), (ancho / 2, "ronda1", AZUL, "Ronda 1")):
+        minutos = [m for m in res[r]["reparto_por_minuto"] if m["minuto"] <= 2]
+        xs = [m["minuto"] + desplaza for m in minutos]
+        vals = [100 * m["parte_saturado"] for m in minutos]
+        ax.bar(xs, vals, ancho, color=color, label=nombre)
+        for x, v in zip(xs, vals):
+            etiqueta_directa(ax, x, v + 0.8, f"{v:.0f} %", ha="center", va="bottom", fontsize=8.5)
+    ax.set_xticks(range(3), ["minuto 1", "minuto 2", "minuto 3"])
+    ax.set_ylabel("% de las llamadas del API")
+    ax.set_ylim(0, 27)
+    ax.tick_params(axis="x", length=0)
     ax.grid(axis="y", alpha=0.25)
-    for lado in ("top", "right"):
-        ax.spines[lado].set_visible(False)
-    fig.savefig(RAIZ / "comparacion.png", dpi=130)
+    ax.legend(frameon=False, fontsize=8.5, loc="upper left")
+    ax.set_title("Parte del tráfico que recibió el pod saturado", loc="left", fontsize=10, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(RAIZ / "reparto.png", dpi=170)
     plt.close(fig)
 
 
 if __name__ == "__main__":
+    resultados()
     tablero()
-    comparacion()
-    print("tablero.png y comparacion.png escritos en", RAIZ)
+    reparto()
+    print("gráficas escritas en", RAIZ)

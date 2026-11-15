@@ -1,4 +1,4 @@
-# Ingeniería del caos: API de Mari en GKE
+# Ingeniería del caos: StatsNostra en GKE
 
 Experimento de agotamiento de recursos sobre la API de StatsNostra, que corre en
 GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al

@@ -1,4 +1,4 @@
-"""Dibuja el diagrama de arquitectura del experimento (arquitectura.png)."""
+"""Dibuja el diagrama del flujo y de dónde se inyecta la falla (arquitectura.png)."""
 from pathlib import Path
 
 import matplotlib
@@ -7,41 +7,41 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
-AZUL, ROJO, GRIS, VERDE = "#0072B2", "#D55E00", "#555555", "#009E73"
-fig, ax = plt.subplots(figsize=(9.2, 3.3))
+AZUL, NARANJA, GRIS = "#2a78d6", "#eb6834", "#8a8a85"
+TINTA, FONDO = "#0b0b0b", "#fcfcfb"
+
+fig, ax = plt.subplots(figsize=(9.4, 3.4))
+fig.patch.set_facecolor(FONDO)
 ax.set_xlim(0, 100)
-ax.set_ylim(0, 36)
+ax.set_ylim(0, 38)
 ax.axis("off")
 
 
-def caja(x, y, w, h, texto, color, relleno="white", tam=8, negrita=False):
-    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.3,rounding_size=1.2",
-                                fc=relleno, ec=color, lw=1.6))
-    ax.text(x + w / 2, y + h / 2, texto, ha="center", va="center", fontsize=tam,
-            fontweight="bold" if negrita else "normal", color="#222")
+def caja(x, y, w, h, titulo, detalle, borde, relleno=FONDO):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.25,rounding_size=1.2", fc=relleno, ec=borde, lw=1.6))
+    ax.text(x + w / 2, y + h * 0.62, titulo, ha="center", va="center", fontsize=8.8, fontweight="bold", color=TINTA)
+    if detalle:
+        ax.text(x + w / 2, y + h * 0.27, detalle, ha="center", va="center", fontsize=7.4, color="#52514e")
 
 
-def flecha(x1, y1, x2, y2, color=GRIS):
-    ax.annotate("", xy=(x2, y2), xytext=(x1, y1), arrowprops=dict(arrowstyle="-|>", color=color, lw=1.4))
+def flecha(x1, y1, x2, y2):
+    ax.annotate("", xy=(x2, y2), xytext=(x1, y1), arrowprops=dict(arrowstyle="-|>", color="#52514e", lw=1.3))
 
 
-caja(1, 14, 12, 8, "k6\n5, 15 y 30\nusuarios", GRIS)
-caja(19, 14, 17, 8, "Coordinador\n(Azure, Juan)\nflujo con X-Trace-Id", AZUL)
-caja(42, 24, 15, 8, "API de Pipe\n(AWS)", AZUL)
-ax.add_patch(FancyBboxPatch((42, 3), 55, 18, boxstyle="round,pad=0.3,rounding_size=1.2",
-                            fc="#F6FAFD", ec=AZUL, lw=1.6))
-ax.text(44, 19, "GKE zonal (Dataplane V2) · API de Mari, IP 34.68.14.217", fontsize=8, fontweight="bold", va="center")
-caja(45, 6, 13, 8, "Servicio\nbalanceador", GRIS, tam=7.5)
-caja(62, 10.5, 15, 6.5, "Pod 1 · API\n(el que se satura)", ROJO, "#FBEFE6", tam=7.5)
-caja(62, 4, 15, 6, "Pod 2 · API\n(+ HPA: hasta 4)", AZUL, tam=7.5)
-caja(82, 7, 13, 8, "Cloud SQL\n(por proxy)", GRIS, tam=7.5)
-flecha(13, 18, 19, 18)
-flecha(36, 20, 42, 27)
-flecha(36, 16, 45, 11)
-flecha(58, 11, 62, 13.5)
-flecha(58, 10, 62, 7)
-flecha(77, 13, 82, 11.5)
-flecha(77, 7, 82, 9.5)
-ax.text(1, 9, "Falla: un pod consume\nCPU 180 s (POST /fault/cpu)", color=ROJO, fontsize=7.5, fontweight="bold", va="top")
-ax.text(1, 3.5, "Se mide: p95 del flujo (k6),\nretraso del bucle y CPU por pod", color=GRIS, fontsize=7.5, va="top")
-fig.savefig(Path(__file__).with_name("arquitectura.png"), dpi=150, bbox_inches="tight")
+caja(1, 15, 13, 9, "k6", "hasta 30 usuarios", GRIS)
+caja(20, 15, 19, 9, "trading-journal", "Azure · arma el flujo", AZUL)
+caja(45, 28, 17, 8, "ecommerce", "AWS", AZUL)
+ax.add_patch(FancyBboxPatch((45, 1.5), 53, 21, boxstyle="round,pad=0.25,rounding_size=1.2", fc="#f3f7fc", ec=AZUL, lw=1.6))
+ax.text(47, 20, "StatsNostra en GKE · 34.68.14.217", fontsize=8.8, fontweight="bold", va="center", color=TINTA)
+caja(47.5, 5, 14.5, 9, "Balanceador", "reparte el tráfico", GRIS)
+caja(65, 11.5, 15, 6.5, "Pod saturado", "consume CPU 180 s", NARANJA, "#fdf0ea")
+caja(65, 3, 15, 6.5, "Pods sanos", "2 al inicio, hasta 4", AZUL)
+caja(84, 6.5, 13, 8, "Cloud SQL", "por proxy", GRIS)
+flecha(14, 19.5, 20, 19.5)
+flecha(39, 22, 45, 30)
+flecha(39, 18, 48, 11)
+flecha(61, 11.5, 65, 14.5)
+flecha(61, 8.5, 65, 6.5)
+flecha(80, 14.5, 84, 12)
+flecha(80, 6.5, 84, 9)
+fig.savefig(Path(__file__).with_name("arquitectura.png"), dpi=170, bbox_inches="tight")
