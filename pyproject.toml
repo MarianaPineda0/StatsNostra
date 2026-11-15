@@ -12,3 +12,7 @@ extend-exclude = ["migrations/versions"]
 select = ["E", "F", "I", "UP", "B"]
 # B008: Depends(...) en valores por defecto es el patron oficial de FastAPI, no un bug.
 ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# El informe es una plantilla HTML dentro de un f-string: las líneas largas son el texto
+"caos/informe/generar_informe.py" = ["E501"]

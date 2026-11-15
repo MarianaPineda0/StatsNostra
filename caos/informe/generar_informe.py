@@ -9,6 +9,7 @@ texto solo describe. Si se repite una ronda, basta con volver a correr:
 
 El PDF se imprime con Edge o Chrome sin interfaz, así que hace falta uno de los dos.
 """
+
 import csv
 import json
 import statistics
@@ -47,8 +48,14 @@ X = estable["x_ms"]
 def k6(ronda: str) -> dict:
     m = leer(EVIDENCIA / f"ronda-{ronda}" / "corrida-1.json")["metrics"]
     d = m["http_req_duration"]
-    return {"p50": d["med"], "p95": d["p(95)"], "p99": d["p(99)"], "max": d["max"], "flujos": m["http_reqs"]["count"],
-            "exito": 100 * (1 - m["http_req_failed"]["value"])}
+    return {
+        "p50": d["med"],
+        "p95": d["p(95)"],
+        "p99": d["p(99)"],
+        "max": d["max"],
+        "flujos": m["http_reqs"]["count"],
+        "exito": 100 * (1 - m["http_req_failed"]["value"]),
+    }
 
 
 r0, r1 = k6("0"), k6("1")
@@ -61,13 +68,21 @@ iny = {r: leer(DATOS / f"inyeccion-ronda{r}.json") for r in "01"}
 def lag_stats(ronda: str) -> dict:
     saturado = iny[ronda]["pod_saturado"]
     sat, sano = [], []
-    for f in csv.DictReader(open(EVIDENCIA / f"ronda-{ronda}" / "lag-pods.csv", encoding="utf-8")):
+    for f in csv.DictReader(
+        open(EVIDENCIA / f"ronda-{ronda}" / "lag-pods.csv", encoding="utf-8")
+    ):
         if f["lag_ms"] == "NA":
             continue
         (sat if f["pod"] == saturado else sano).append(float(f["lag_ms"]))
-    return {"sat_med": statistics.median(sat), "sat_max": max(sat), "sano_med": statistics.median(sano),
-            "sat_sobre": sum(v > 50 for v in sat), "sat_n": len(sat),
-            "sano_sobre": sum(v > 50 for v in sano), "sano_n": len(sano)}
+    return {
+        "sat_med": statistics.median(sat),
+        "sat_max": max(sat),
+        "sano_med": statistics.median(sano),
+        "sat_sobre": sum(v > 50 for v in sat),
+        "sat_n": len(sat),
+        "sano_sobre": sum(v > 50 for v in sano),
+        "sano_n": len(sano),
+    }
 
 
 lag0, lag1 = lag_stats("0"), lag_stats("1")
@@ -90,11 +105,16 @@ cpu_sat1 = cpu_max(EVIDENCIA / "ronda-1" / "cpu-pods.txt", iny["1"]["pod_saturad
 
 def segundos_hasta_hpa() -> float:
     from datetime import datetime
+
     inicio = datetime.fromisoformat(iny["1"]["inicio_utc"].replace("Z", "+00:00"))
-    for linea in (EVIDENCIA / "ronda-1" / "cpu-pods.txt").read_text(encoding="utf-8").splitlines():
+    for linea in (
+        (EVIDENCIA / "ronda-1" / "cpu-pods.txt").read_text(encoding="utf-8").splitlines()
+    ):
         partes = linea.split()
         if len(partes) - 1 > 2:
-            return (datetime.fromisoformat(partes[0].replace("Z", "+00:00")) - inicio).total_seconds()
+            return (
+                datetime.fromisoformat(partes[0].replace("Z", "+00:00")) - inicio
+            ).total_seconds()
     return float("nan")
 
 
@@ -107,7 +127,10 @@ def pod_de(ronda: str, rol: str) -> dict:
 
 sat0, sano0, sat1 = pod_de("0", "saturado"), pod_de("0", "sano"), pod_de("1", "saturado")
 sanos1 = [p for p in pods["ronda1"]["pods"] if p["rol"] == "sano"]
-reparto = {r: {m["minuto"]: m["parte_saturado"] for m in pods[f"ronda{r}"]["reparto_por_minuto"]} for r in "01"}
+reparto = {
+    r: {m["minuto"]: m["parte_saturado"] for m in pods[f"ronda{r}"]["reparto_por_minuto"]}
+    for r in "01"
+}
 traza = pods["traza"]
 ruta_corta = lambda r: r.replace("/api/v1/", "")  # noqa: E731
 
@@ -115,23 +138,63 @@ ruta_corta = lambda r: r.replace("/api/v1/", "")  # noqa: E731
 corridas = "".join(
     f"<tr><td>{c['corrida']}</td><td>{n(c['peticiones'])}</td><td>{dec(100 * c['exito'], 0)} %</td>"
     f"<td>{n(c['p50_ms'])} ms</td><td>{n(c['p95_ms'])} ms</td><td>{n(c['p99_ms'])} ms</td></tr>"
-    for c in estable["detalle"])
+    for c in estable["detalle"]
+)
 
 comparacion = [
-    ("Éxito", f"{dec(100 * mediana['exito'], 0)} %", f"{dec(r0['exito'], 0)} %", f"{dec(r1['exito'], 0)} %", "igual"),
-    ("p50", f"{n(mediana['p50_ms'])} ms", f"{n(r0['p50'])} ms", f"{n(r1['p50'])} ms", variacion(r1["p50"], r0["p50"])),
-    ("p95", f"{n(mediana['p95_ms'])} ms", f"{n(r0['p95'])} ms", f"{n(r1['p95'])} ms", variacion(r1["p95"], r0["p95"])),
-    ("p99", f"{n(mediana['p99_ms'])} ms", f"{n(r0['p99'])} ms", f"{n(r1['p99'])} ms", variacion(r1["p99"], r0["p99"])),
-    ("Máximo", "sin medir", f"{n(r0['max'])} ms", f"{n(r1['max'])} ms", variacion(r1["max"], r0["max"])),
-    ("Flujos completados", n(flujos_estable), n(r0["flujos"]), n(r1["flujos"]), variacion(r1["flujos"], r0["flujos"])),
+    (
+        "Éxito",
+        f"{dec(100 * mediana['exito'], 0)} %",
+        f"{dec(r0['exito'], 0)} %",
+        f"{dec(r1['exito'], 0)} %",
+        "igual",
+    ),
+    (
+        "p50",
+        f"{n(mediana['p50_ms'])} ms",
+        f"{n(r0['p50'])} ms",
+        f"{n(r1['p50'])} ms",
+        variacion(r1["p50"], r0["p50"]),
+    ),
+    (
+        "p95",
+        f"{n(mediana['p95_ms'])} ms",
+        f"{n(r0['p95'])} ms",
+        f"{n(r1['p95'])} ms",
+        variacion(r1["p95"], r0["p95"]),
+    ),
+    (
+        "p99",
+        f"{n(mediana['p99_ms'])} ms",
+        f"{n(r0['p99'])} ms",
+        f"{n(r1['p99'])} ms",
+        variacion(r1["p99"], r0["p99"]),
+    ),
+    (
+        "Máximo",
+        "sin medir",
+        f"{n(r0['max'])} ms",
+        f"{n(r1['max'])} ms",
+        variacion(r1["max"], r0["max"]),
+    ),
+    (
+        "Flujos completados",
+        n(flujos_estable),
+        n(r0["flujos"]),
+        n(r1["flujos"]),
+        variacion(r1["flujos"], r0["flujos"]),
+    ),
 ]
 filas_comparacion = "".join(
-    f"<tr><td>{a}</td><td>{b}</td><td>{c}</td><td>{d}</td><td>{e}</td></tr>" for a, b, c, d, e in comparacion)
+    f"<tr><td>{a}</td><td>{b}</td><td>{c}</td><td>{d}</td><td>{e}</td></tr>"
+    for a, b, c, d, e in comparacion
+)
 
 filas_traza = "".join(
     f"<tr><td>{ruta_corta(c0['ruta'])}</td><td>{n(c0['ms'])} ms (pod {c0['rol']})</td>"
     f"<td>{n(c1['ms'])} ms (pod {c1['rol']})</td></tr>"
-    for c0, c1 in zip(traza["ronda0"], traza["ronda1"]))
+    for c0, c1 in zip(traza["ronda0"], traza["ronda1"], strict=False)
+)
 
 HTML = f"""<html><head><meta charset="utf-8"><title>Agotamiento de CPU en StatsNostra</title>
 <style>
@@ -233,12 +296,14 @@ th {{ background-color: #eaf1fb; color: #14213d; }}
 
 (AQUI / "informe-caos-statsnostra.html").write_text(HTML, encoding="utf-8")
 
+
 def navegador() -> str:
     candidatos = [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        "/usr/bin/google-chrome", "/usr/bin/chromium",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
     ]
     for c in candidatos:
         if Path(c).exists():
@@ -247,11 +312,22 @@ def navegador() -> str:
 
 
 salida = AQUI / "informe-caos-statsnostra.pdf"
-subprocess.run([navegador(), "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
-                f"--print-to-pdf={salida}", (AQUI / "informe-caos-statsnostra.html").as_uri()],
-               check=True, capture_output=True, timeout=120)
+subprocess.run(
+    [
+        navegador(),
+        "--headless=new",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        f"--print-to-pdf={salida}",
+        (AQUI / "informe-caos-statsnostra.html").as_uri(),
+    ],
+    check=True,
+    capture_output=True,
+    timeout=120,
+)
 try:
     import pymupdf
+
     print("páginas:", pymupdf.open(str(salida)).page_count)
 except ImportError:
     print("PDF escrito en", salida)
