@@ -37,7 +37,7 @@ sirvió para el proceso de instalación.
   innecesarios dentro de la imagen.
 - 📡 **`PYTHONUNBUFFERED=1`**: los logs de la aplicación se escriben en tiempo
   real, sin quedar retenidos en un buffer (importante para ver logs en vivo
-  en Render o en `docker logs`).
+  en el clúster o en `docker logs`).
 - 🙈 **`.dockerignore`**: evita copiar archivos innecesarios o sensibles
   (`.env`, `.git`, `tests/`, etc.) al contexto de construcción de la imagen.
 - 🗃️ **Migraciones automáticas**: el comando de arranque del servicio `api`

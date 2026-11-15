@@ -1,8 +1,28 @@
 # Ingeniería del caos: StatsNostra en GKE
 
-Experimento de agotamiento de recursos sobre la API de StatsNostra, que corre en
-GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
-100 %, ¿el flujo se mantiene rápido y disponible?**
+Experimento de agotamiento de recursos sobre la API de StatsNostra, que corre en GKE con
+2 réplicas. La pregunta: si la CPU de un pod llega al 100 %, ¿el flujo se mantiene rápido
+y disponible?
+
+```mermaid
+flowchart LR
+  k6["k6 (5, 15, 30 usuarios)"] --> TJ["trading-journal (Azure)"]
+  TJ --> EC["ecommerce (AWS)"]
+  TJ --> LB["StatsNostra: balanceador"]
+  LB --> P1["Pod saturado"]
+  LB --> P2["Pods sanos (2 a 4)"]
+  CH["Chaos Toolkit"] -. "POST /fault/cpu" .-> P1
+  CH -. "lanza" .-> k6
+```
+
+| | p95 del flujo | Éxito | Hipótesis (p95 <= 1.511 ms) |
+|---|---|---|---|
+| Estado estable | 1.208 ms | 100 % | referencia |
+| Ronda 0, sin mejoras | 3.425 ms | 100 % | se refuta |
+| Ronda 1, con mejoras | 774 ms | 100 % | se cumple |
+
+El informe está en [`informe/informe-caos-statsnostra.pdf`](informe/informe-caos-statsnostra.pdf)
+y las gráficas en [`tablero/`](tablero/README.md).
 
 ## Qué hay aquí
 
@@ -21,13 +41,51 @@ GKE con 2 réplicas. La pregunta que responde: **si la CPU de un pod llega al
 | `informe/` | Informe del experimento (PDF de 4 páginas, con su fuente HTML y el script que lo genera) |
 | `evidencia/` | Resultados medidos: estado estable y, a medida que se hacen, cada ronda |
 
+## Matriz del experimento
+
+| Qué | Detalle |
+|---|---|
+| Falla | Un hilo del pod consume CPU 180 s (`POST /fault/cpu`) |
+| Métrica objetivo | p95 y éxito del flujo, medidos con k6 |
+| Instrumentos | k6, `kubectl top`, retraso del bucle de eventos (`/metrics`), logs por trace id |
+| Ronda 0 | 2 réplicas, 100m/250m de CPU, readiness que solo dice que el proceso atiende |
+| Mejoras | readiness por saturación (50 ms), 200m/500m de CPU, HPA al 60 % de 2 a 4 réplicas |
+| Ronda 1 | Mismo perfil, mismo fallo, misma duración |
+| Parada | `bash caos/acciones/cpu.sh detener`, o apagar el interruptor con `deshabilitar` |
+
+## Qué se conserva y qué se retira
+
+Se conserva de la versión 2: las rutas `/api/v1` y `/api/v2` con su lógica y sus pruebas, la
+integración con trading-journal y ecommerce, y el trace id entre nubes. Se agregó el contrato
+común del grupo (X-App-Name, log por petición, interruptor de fallos, sondas de salud) y el
+endpoint de CPU.
+
+Se retira de la versión 2: los despliegues en Render, la caché en Redis (no hay Memorystore en
+esta infraestructura) y la exportación a Grafana Cloud, que queda como pendiente hasta tener las
+credenciales de la organización. El canary de la entrega 4 es otra línea (`main` y `develop`) y
+no se toca.
+
+## Demo en vivo
+
+1. Flujo completo con trace id: `curl -H "X-Trace-Id: demo-1" https://api-coordinador.jollybeach-fbb8b9ad.eastus.azurecontainerapps.io/api/v2/trades/5540`
+   y buscar `demo-1` en los logs de StatsNostra.
+2. Falla real, en una ventana sin otra carga y con k6 corriendo en paralelo
+   (`bash caos/carga/correr.sh caos/evidencia/demo 1`): `bash caos/acciones/cpu.sh habilitar` y
+   `bash caos/acciones/cpu.sh saturar 90 0`. Con `kubectl top pods -n statsnostra` se ve un pod
+   en su límite de CPU. Conviene ensayarlo antes: sin carga el retraso del pod saturado puede
+   quedar cerca del umbral de 50 ms.
+3. Patrón de resiliencia actuando: en otra terminal, `kubectl get pods -n statsnostra -w` (el pod
+   saturado pasa a no listo cuando su retraso supera 50 ms) y `kubectl get hpa -n statsnostra -w`.
+4. Comparación de las dos rondas: [`tablero/tablero.png`](tablero/tablero.png).
+5. Reversión: `bash caos/acciones/cpu.sh detener` y `bash caos/acciones/cpu.sh deshabilitar`; los
+   dos pods vuelven a estar listos.
+
 ## El experimento
 
 - **Fallo:** saturar la CPU de **un** pod durante 3 minutos. El otro no se toca.
 - **Hipótesis:** con el perfil de carga fijo del grupo (k6: 5, 15 y 30 usuarios de
   60 s cada uno), el flujo mantiene una tasa de éxito ≥ 99 % y un p95 ≤ X ms.
-  X es el p95 del estado estable medido más un 25 % de margen; mientras no se
-  mida, `x_ms` queda en `null` en el JSON.
+  X es el p95 del estado estable medido más un 25 % de margen: 1.511 ms.
 - **Radio de impacto:** un pod de `statsnostra-api` y tráfico sintético de k6.
 - **Abortos:** éxito del flujo < 50 %, p95 > 15 000 ms durante 30 s, o cualquier
   error al intentar detener el consumo.
