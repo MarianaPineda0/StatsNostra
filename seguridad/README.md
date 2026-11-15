@@ -16,6 +16,8 @@ Cada acción queda en la [bitácora](bitacora.md).
 | [`resultados.md`](resultados.md) | Tabla de las dos rondas (MTTD, MTTC, bloqueos), generada con `resumen.py` |
 | [`acciones/`](acciones/exposicion.sh), [`mejoras/`](mejoras/) | Scripts del experimento, la alerta y la NetworkPolicy de la ronda 1 |
 | [`evidencia/`](evidencia/) | Medición de la línea base y resultado de cada ronda |
+| [`tendencias/`](tendencias/) | Credencial señuelo y mínimo privilegio de la cuenta del despliegue, con su prueba |
+| [`informe/`](informe/informe-seguridad-statsnostra.pdf) | Informe de seguridad (PDF de 5 páginas), con su fuente y las gráficas |
 
 ## Capas, puntos de inyección y telemetría
 
