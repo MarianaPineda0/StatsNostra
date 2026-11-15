@@ -2,8 +2,9 @@
 
 Escribe cronologia.png, resultados.png, identidades.png y capas.png en esta carpeta. Los
 tiempos salen de los JSON de cada ronda y de las filas de la bitácora; los conteos, de los
-JSON del inventario de identidades. Misma paleta que el informe de caos: azul para la referencia, morado
-para lo que falla o queda abierto y verde para lo que se controla.
+JSON del inventario de identidades y del inventario de controles. Misma paleta que el informe
+de caos: azul para la referencia, morado para lo que falla o queda abierto y verde para lo que
+se controla.
 
 Uso: python seguridad/informe/dibujar.py
 """
