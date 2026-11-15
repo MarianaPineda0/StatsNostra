@@ -2,7 +2,7 @@ name: Pipeline de Pruebas
 
 on:
   push:
-    branches: [develop, v5-develop]
+    branches: [develop, v5-develop, v5-seguridad]
   pull_request:
     branches: [v5]
 
