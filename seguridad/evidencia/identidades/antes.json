@@ -1,0 +1,64 @@
+[
+  {
+    "cuenta": "599897195726-compute@developer.gserviceaccount.com",
+    "llaves_de_usuario": 0,
+    "roles": [
+      "roles/artifactregistry.writer",
+      "roles/cloudsql.client",
+      "roles/cloudtrace.agent",
+      "roles/logging.logWriter",
+      "roles/storage.objectAdmin"
+    ],
+    "roles_admin": [
+      "roles/storage.objectAdmin"
+    ]
+  },
+  {
+    "cuenta": "statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com",
+    "llaves_de_usuario": 0,
+    "roles": [
+      "roles/artifactregistry.admin",
+      "roles/artifactregistry.writer",
+      "roles/cloudbuild.builds.editor",
+      "roles/cloudsql.admin",
+      "roles/cloudsql.client",
+      "roles/compute.networkAdmin",
+      "roles/compute.viewer",
+      "roles/container.admin",
+      "roles/container.developer",
+      "roles/iam.serviceAccountUser",
+      "roles/logging.logWriter",
+      "roles/monitoring.viewer",
+      "roles/redis.admin",
+      "roles/run.admin",
+      "roles/secretmanager.admin",
+      "roles/serviceusage.serviceUsageAdmin",
+      "roles/serviceusage.serviceUsageConsumer",
+      "roles/storage.objectAdmin"
+    ],
+    "roles_admin": [
+      "roles/artifactregistry.admin",
+      "roles/cloudsql.admin",
+      "roles/compute.networkAdmin",
+      "roles/container.admin",
+      "roles/redis.admin",
+      "roles/run.admin",
+      "roles/secretmanager.admin",
+      "roles/serviceusage.serviceUsageAdmin",
+      "roles/storage.objectAdmin"
+    ]
+  },
+  {
+    "cuenta": "statsnostra-v5-nodos@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com",
+    "llaves_de_usuario": 0,
+    "roles": [
+      "roles/artifactregistry.reader",
+      "roles/cloudsql.client",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/monitoring.viewer",
+      "roles/stackdriver.resourceMetadata.writer"
+    ],
+    "roles_admin": []
+  }
+]
