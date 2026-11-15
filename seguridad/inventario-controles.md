@@ -14,7 +14,8 @@ trazabilidad: ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207.
 | Despliegue sin llaves: GitHub entra a Google Cloud con Workload Identity Federation | `desplegar-gke.yml`, pool `github-pool` | Activo | Registros de auditoría de IAM | ISO 5.15, 8.2; NIST AC-6, IA-5 |
 | Cuenta de los nodos con permisos mínimos (logs, métricas, imágenes, Cloud SQL) | `terraform/cuentas.tf` | Activo | Registros de auditoría de IAM | ISO 8.2; NIST AC-6 |
 | Contraseña de la base efímera, sin quedar en el estado de Terraform, y guardada en Secret Manager | `terraform/cloudsql.tf`, `secretos.tf` | Activo | Auditoría de Secret Manager | ISO 5.17; NIST IA-5 |
-| Auditoría de lectura de secretos (registros de acceso a datos) | Secret Manager | **Hueco**: no está habilitada | Ninguna hoy | NIST AU-2 |
+| Auditoría de lectura de secretos (registros de acceso a datos) | Secret Manager | Activo (cerrado el 15 nov): se habilitó la lectura de datos del servicio | `cloudaudit.googleapis.com/data_access` | NIST AU-2 |
+| Cuenta del despliegue con mínimo privilegio: 7 roles en el proyecto en vez de 18 | IAM, `seguridad/tendencias/minimo_privilegio.sh` | Activo (cerrado el 15 nov) | Registros de auditoría de IAM | ISO 5.15, 8.2; NIST AC-6 |
 
 ## Red
 
@@ -50,13 +51,16 @@ trazabilidad: ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207.
 |---|---|---|---|---|
 | Registros de auditoría de Kubernetes (actividad de administración) en Cloud Logging | GKE | Activo | `cloudaudit.googleapis.com/activity` con `io.k8s.core.v1.services.create` y similares | ISO 8.15; NIST AU-2, AU-12 |
 | Log JSON de cada petición con trace id, ruta, status y duración | `app/core/middleware.py` | Activo | Cloud Logging | ISO 8.15; NIST AU-3 |
-| **Alerta sobre servicios nuevos expuestos** | Cloud Logging | **Hueco**: no existe | Ninguna hoy | ISO 8.16; NIST SI-4, IR-4 |
+| Alerta sobre servicios nuevos expuestos | Cloud Logging y Pub/Sub | Activo (cerrado el 15 nov) | Alerta a los 45 s en la ronda 1 | ISO 8.16; NIST SI-4, IR-4 |
+| Secreto señuelo con alerta de lectura | Secret Manager | Activo (cerrado el 15 nov) | Alerta al abrir `statsnostra-admin-respaldo` | ISO 8.16; NIST SI-4 |
 | Alerta sobre tráfico este-oeste no declarado | Cloud Logging | **Hueco**: no existe | Ninguna hoy | D3-NTA; ISO 8.16 |
 
 ## Cómo se usa
 
-Los huecos en negrita son la base del experimento 2: la ronda 0 mide la detección con el
-control tal como está hoy (sin alertas ni NetworkPolicy) y la ronda 1 la repite después de cerrar
-al menos dos de ellos. Las técnicas de ATT&CK emuladas, comprobadas en attack.mitre.org, son
+Los huecos eran la base del experimento 2: la ronda 0 midió la detección con el control tal como
+estaba (sin alertas ni NetworkPolicy) y la ronda 1 la repitió después de cerrar dos. Los que se
+cerraron el 15 de noviembre dicen "cerrado el 15 nov" en la columna de estado; la NetworkPolicy se
+aplicó solo durante la ronda 1 y se revirtió, así que sigue como hueco hasta que se decida
+dejarla de forma permanente. Las técnicas de ATT&CK emuladas, comprobadas en attack.mitre.org, son
 Exploit Public-Facing Application (T1190), Remote Services (T1021) y Exfiltration Over
 Alternative Protocol (T1048).
