@@ -12,7 +12,11 @@ NUMERO=599897195726
 TEMA=alertas-caos
 SUSCRIPCION=alertas-caos-sub
 CANAL="StatsNostra: alertas del experimento de seguridad"
-POLITICA="StatsNostra: Service expuesto en GKE"
+# regla -> nombre de la política (las reglas están en seguridad/deteccion/reglas.py)
+declare -A POLITICAS=(
+  [service-expuesto]="StatsNostra: Service expuesto en GKE"
+  [credencial-senuelo]="StatsNostra: credencial señuelo leída"
+)
 API="https://monitoring.googleapis.com/v3"
 SERVICEUSAGE="https://serviceusage.googleapis.com/v1beta1"
 TMP="${TMPDIR:-/tmp}/politica-alerta.json"
@@ -50,19 +54,24 @@ crear() {
     canal=$(llamar -X POST "$API/projects/$PROYECTO/notificationChannels" -d "{\"type\": \"pubsub\", \"displayName\": \"$CANAL\", \"labels\": {\"topic\": \"projects/$PROYECTO/topics/$TEMA\"}}" \
       | python -c "import json,sys; print(json.load(sys.stdin)['name'])")
   fi
-  politica=$(nombre_de alertPolicies "$POLITICA")
-  if [ -z "$politica" ]; then
-    python seguridad/mejoras/politica_alerta.py "$canal" "$POLITICA" > "$TMP"
-    llamar -X POST "$API/projects/$PROYECTO/alertPolicies" -d @"$TMP" \
-      | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('name') or d)"
-  fi
+  local regla
+  for regla in "${!POLITICAS[@]}"; do
+    politica=$(nombre_de alertPolicies "${POLITICAS[$regla]}")
+    if [ -z "$politica" ]; then
+      python seguridad/mejoras/politica_alerta.py "$regla" "$canal" "${POLITICAS[$regla]}" > "$TMP"
+      llamar -X POST "$API/projects/$PROYECTO/alertPolicies" -d @"$TMP"         | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('name') or d)"
+    fi
+  done
   echo "alerta lista: tema $TEMA, canal y política creados"
 }
 
 quitar() {
   local politica canal
-  politica=$(nombre_de alertPolicies "$POLITICA")
-  if [ -n "$politica" ]; then llamar -X DELETE "$API/$politica" >/dev/null; fi
+  local regla
+  for regla in "${!POLITICAS[@]}"; do
+    politica=$(nombre_de alertPolicies "${POLITICAS[$regla]}")
+    if [ -n "$politica" ]; then llamar -X DELETE "$API/$politica" >/dev/null; fi
+  done
   canal=$(nombre_de notificationChannels "$CANAL")
   if [ -n "$canal" ]; then llamar -X DELETE "$API/$canal?force=true" >/dev/null; fi
   gcloud pubsub subscriptions delete "$SUSCRIPCION" --project="$PROYECTO" --quiet 2>/dev/null || true
@@ -74,7 +83,9 @@ case "${1:-}" in
   crear) crear ;;
   quitar) quitar ;;
   estado)
-    echo "política: $(nombre_de alertPolicies "$POLITICA")"
+    for regla in "${!POLITICAS[@]}"; do
+      echo "política $regla: $(nombre_de alertPolicies "${POLITICAS[$regla]}")"
+    done
     echo "canal: $(nombre_de notificationChannels "$CANAL")"
     gcloud pubsub topics list --project="$PROYECTO" --format='value(name)' | grep "$TEMA" || true
     ;;
