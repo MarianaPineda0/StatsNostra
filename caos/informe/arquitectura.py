@@ -7,8 +7,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
-AZUL, NARANJA, GRIS = "#2a78d6", "#eb6834", "#8a8a85"
-TINTA, FONDO = "#0b0b0b", "#fcfcfb"
+AZUL, MORADO, VERDE, GRIS = "#3b8eea", "#7b3fb0", "#12a150", "#8a8a85"
+TINTA, FONDO = "#14213d", "#ffffff"
+plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "DejaVu Serif"]})
 
 fig, ax = plt.subplots(figsize=(9.4, 3.4))
 fig.patch.set_facecolor(FONDO)
@@ -19,9 +20,9 @@ ax.axis("off")
 
 def caja(x, y, w, h, titulo, detalle, borde, relleno=FONDO):
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.25,rounding_size=1.2", fc=relleno, ec=borde, lw=1.6))
-    ax.text(x + w / 2, y + h * 0.62, titulo, ha="center", va="center", fontsize=8.8, fontweight="bold", color=TINTA)
+    ax.text(x + w / 2, y + h * 0.62, titulo, ha="center", va="center", fontsize=10.5, fontweight="bold", color=TINTA)
     if detalle:
-        ax.text(x + w / 2, y + h * 0.27, detalle, ha="center", va="center", fontsize=7.4, color="#52514e")
+        ax.text(x + w / 2, y + h * 0.27, detalle, ha="center", va="center", fontsize=8.8, color="#52514e")
 
 
 def flecha(x1, y1, x2, y2):
@@ -31,11 +32,11 @@ def flecha(x1, y1, x2, y2):
 caja(1, 15, 13, 9, "k6", "hasta 30 usuarios", GRIS)
 caja(20, 15, 19, 9, "trading-journal", "Azure · arma el flujo", AZUL)
 caja(45, 28, 17, 8, "ecommerce", "AWS", AZUL)
-ax.add_patch(FancyBboxPatch((45, 1.5), 53, 21, boxstyle="round,pad=0.25,rounding_size=1.2", fc="#f3f7fc", ec=AZUL, lw=1.6))
-ax.text(47, 20, "StatsNostra en GKE · 34.68.14.217", fontsize=8.8, fontweight="bold", va="center", color=TINTA)
+ax.add_patch(FancyBboxPatch((45, 1.5), 53, 21, boxstyle="round,pad=0.25,rounding_size=1.2", fc="#f2f7fe", ec=AZUL, lw=1.6))
+ax.text(47, 20, "StatsNostra en GKE · 34.68.14.217", fontsize=10.5, fontweight="bold", va="center", color=TINTA)
 caja(47.5, 5, 14.5, 9, "Balanceador", "reparte el tráfico", GRIS)
-caja(65, 11.5, 15, 6.5, "Pod saturado", "consume CPU 180 s", NARANJA, "#fdf0ea")
-caja(65, 3, 15, 6.5, "Pods sanos", "2 al inicio, hasta 4", AZUL)
+caja(65, 11.5, 15, 6.5, "Pod saturado", "consume CPU 180 s", MORADO, "#f3ecf8")
+caja(65, 3, 15, 6.5, "Pods sanos", "2 al inicio, hasta 4", VERDE, "#e9f7ef")
 caja(84, 6.5, 13, 8, "Cloud SQL", "por proxy", GRIS)
 flecha(14, 19.5, 20, 19.5)
 flecha(39, 22, 45, 30)

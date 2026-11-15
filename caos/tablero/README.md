@@ -10,7 +10,7 @@ límite de 1.511 ms; la de la derecha, cuántos flujos completó cada prueba.
 ![Las dos rondas](tablero.png)
 
 Cada columna es una ronda y el eje va en minutos desde que empezó el fallo, así que se leen
-una sobre otra. La zona naranja son los 180 s de CPU saturada. Las escalas verticales son las
+una sobre otra. La zona morada son los 180 s de CPU saturada. Las escalas verticales son las
 mismas en las dos rondas.
 
 | Panel | Qué mide | De dónde sale |

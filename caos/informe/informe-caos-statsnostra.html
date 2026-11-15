@@ -1,35 +1,38 @@
 <html><head><meta charset="utf-8"><title>Agotamiento de CPU en StatsNostra</title>
 <style>
-body { font-family: sans-serif; font-size: 10pt; line-height: 1.35; color: #1c1c1b; }
-h1 { font-size: 18pt; margin: 0; color: #0b0b0b; }
-h2 { font-size: 12pt; margin: 11pt 0 3pt 0; color: #2a78d6; }
-p { margin: 3pt 0 4pt 0; }
-table { border-collapse: collapse; margin: 3pt 0 6pt 0; }
-th, td { border: 0.5pt solid #b9b8b2; padding: 2.5pt 5pt; font-size: 9pt; }
-th { background-color: #eef3f9; text-align: left; }
-.sub { color: #52514e; font-size: 10pt; margin: 2pt 0 8pt 0; }
-.tarjeta td { border: none; padding: 7pt 9pt; }
-.grande { font-size: 22pt; font-weight: bold; }
-.pequeno { font-size: 8.5pt; color: #3b3a38; }
-.nota { color: #52514e; font-size: 8.5pt; }
-.hipotesis { background-color: #eef3f9; padding: 6pt 8pt; }
+@page { size: A4; margin: 15mm 16mm; }
+body { font-family: "Times New Roman", Times, serif; font-size: 11.5pt; line-height: 1.4; color: #1b2437; margin: 0; }
+h1 { font-size: 24pt; margin: 0 0 2pt 0; color: #14213d; line-height: 1.15; }
+h2 { font-size: 15pt; margin: 16pt 0 5pt 0; color: #1f5fae; break-after: avoid; }
+p { margin: 4pt 0 6pt 0; }
+img { display: block; margin: 6pt auto; max-width: 100%; break-inside: avoid; }
+table { border-collapse: collapse; margin: 5pt 0 9pt 0; width: 100%; break-inside: avoid; }
+th, td { border: 0.6pt solid #c3cad6; padding: 3.5pt 6pt; font-size: 10.5pt; text-align: left; vertical-align: top; }
+th { background-color: #eaf1fb; color: #14213d; }
+.sub { color: #4b5563; font-size: 12pt; margin: 0 0 10pt 0; }
+.tarjetas { border: none; margin: 0 0 8pt 0; border-spacing: 8pt 0; border-collapse: separate; }
+.tarjetas td { border: none; border-radius: 6pt; padding: 9pt 11pt; width: 33%; }
+.grande { font-size: 28pt; font-weight: bold; line-height: 1.1; }
+.pequeno { font-size: 10pt; color: #374151; }
+.nota { color: #4b5563; font-size: 10pt; }
+.hipotesis { background-color: #eaf1fb; border-left: 4pt solid #3b8eea; padding: 7pt 10pt; margin: 8pt 0; }
 </style></head><body>
 
 <h1>Agotamiento de CPU en un pod de StatsNostra</h1>
 <p class="sub">Experimento de ingeniería del caos en GKE · 14 de noviembre de 2026</p>
 
-<table class="tarjeta" width="100%"><tr>
-<td width="34%" style="background-color:#fdf0ea"><span class="pequeno">Ronda 0, sin mejoras</span><br/>
-<span class="grande" style="color:#c2481a">3.425 ms</span><br/><span class="pequeno">p95 del flujo. Límite aceptado: 1.511 ms. No se cumple.</span></td>
-<td width="34%" style="background-color:#eaf2fc"><span class="pequeno">Ronda 1, con mejoras</span><br/>
-<span class="grande" style="color:#1f5fae">774 ms</span><br/><span class="pequeno">p95 del flujo. Se cumple, 77 % menos que en la ronda 0.</span></td>
-<td width="32%" style="background-color:#f1f1ee"><span class="pequeno">Errores en las dos rondas</span><br/>
-<span class="grande">0</span><br/><span class="pequeno">El servicio contestó siempre; lo que falló fue la rapidez.</span></td>
+<table class="tarjetas"><tr>
+<td style="background-color:#f3ecf8"><span class="pequeno">Ronda 0, sin mejoras</span><br/>
+<span class="grande" style="color:#5b2a86">3.425 ms</span><br/><span class="pequeno">p95 del flujo. Límite aceptado: 1.511 ms. No se cumple.</span></td>
+<td style="background-color:#e6f6ed"><span class="pequeno">Ronda 1, con mejoras</span><br/>
+<span class="grande" style="color:#0b7a3b">774 ms</span><br/><span class="pequeno">p95 del flujo. Se cumple, 77 % menos que en la ronda 0.</span></td>
+<td style="background-color:#e8f1fd"><span class="pequeno">Errores en las dos rondas</span><br/>
+<span class="grande" style="color:#1f5fae">0</span><br/><span class="pequeno">El servicio contestó siempre; lo que falló fue la rapidez.</span></td>
 </tr></table>
 
 <p>Saturamos durante 3 minutos la CPU de uno de los pods de StatsNostra mientras k6 mandaba carga por el flujo completo: trading-journal en Azure, ecommerce en AWS y StatsNostra en GKE. Queríamos ver si el servicio aguanta que un pod se degrade. Sin cambios no aguantó. Con tres ajustes de configuración, sin tocar el código, sí.</p>
-<p><img src="resultados.png" width="505"/></p>
-<p><img src="arquitectura.png" width="400"/></p>
+<p><img src="../tablero/resultados.png" style="width:100%"/></p>
+<p><img src="arquitectura.png" style="width:78%"/></p>
 
 <h2>1. Cómo medimos</h2>
 <p>El perfil de carga es el mismo en todas las pruebas: 5 usuarios durante 60 s, luego 15 y luego 30, sobre el flujo GET /api/v2/trades/5540 de trading-journal, que llama a StatsNostra y a ecommerce. Antes de inyectar nada lo corrimos tres veces con el sistema sano.</p>
@@ -39,7 +42,7 @@ th { background-color: #eef3f9; text-align: left; }
 <p>Con la mediana fijamos el límite en p95 ≤ 1.511 ms, que es el p95 más un 25 %. Ya en estado estable cada pod llegó a 310 m de CPU, por encima de su límite de 250 m, así que partíamos sin holgura.</p>
 <p class="hipotesis"><b>Hipótesis.</b> Si la CPU de un pod de StatsNostra llega al 100 % durante 3 minutos, el flujo mantiene una tasa de éxito de al menos 99 % y un p95 de a lo sumo 1.511 ms.</p>
 <table>
-<tr><th width="24%">Falla</th><td>Un hilo del pod consume CPU durante 180 s (POST /fault/cpu). Solo funciona con el interruptor de fallos encendido y la cabecera X-Inject-Fault: cpu.</td></tr>
+<tr><th style="width:24%">Falla</th><td>Un hilo del pod consume CPU durante 180 s (POST /fault/cpu). Solo funciona con el interruptor de fallos encendido y la cabecera X-Inject-Fault: cpu.</td></tr>
 <tr><th>Qué se mide</th><td>p95 y éxito del flujo con k6; además el retraso del bucle de eventos y la CPU de cada pod, y los logs por trace id.</td></tr>
 <tr><th>Alcance</th><td>Un solo pod de StatsNostra; el otro no se toca. Tráfico sintético.</td></tr>
 <tr><th>Se aborta si</th><td>El éxito baja de 50 %, el p95 pasa de 15 s durante 30 s, o no se puede detener el consumo.</td></tr>
@@ -50,27 +53,28 @@ th { background-color: #eef3f9; text-align: left; }
 <h2>2. Ronda 0: qué pasó</h2>
 <p>El pod saturado no devolvió errores, contestó tarde. Por eso el éxito siguió en 100 % y la sonda de readiness, que solo comprobaba que el proceso respondiera, nunca lo sacó del balanceo.</p>
 <p>Lo que atendió ese pod fue lento: p50 de 1.490 ms y p95 de 2.615 ms, contra un p95 de 110 ms del pod sano. Su retraso del bucle de eventos pasó de 1 ms a una mediana de 79 ms (máximo 387 ms) y su CPU se quedó en el límite de 250 m. La mediana del flujo apenas se movió (400 ms) porque la mitad de las peticiones seguía cayendo en el pod sano; el p95 sube por las que cayeron en el otro.</p>
+<p>Las dos rondas, lado a lado (la zona morada es la ventana de 3 minutos con la CPU saturada):</p>
+<p><img src="../tablero/tablero.png" style="width:73%"/></p>
+
 <p>El trace id k6-1-134 muestra la diferencia con una misma petición lógica (k6 genera el id con el usuario y la iteración, así que se repite en las dos rondas):</p>
 <table><tr><th>Llamada a StatsNostra</th><th>Ronda 0</th><th>Ronda 1</th></tr>
 <tr><td>partidos</td><td>2.399 ms (pod saturado)</td><td>19 ms (pod sano)</td></tr><tr><td>predicciones</td><td>3.704 ms (pod saturado)</td><td>18 ms (pod sano)</td></tr></table>
-<p>Las dos rondas, lado a lado (la zona naranja es la ventana de 3 minutos con la CPU saturada):</p>
-<p><img src="tablero.png" width="515"/></p>
 
 <h2>3. Qué cambiamos</h2>
 <table>
-<tr><th width="25%">Cambio</th><th width="33%">Valor</th><th>Por qué</th></tr>
+<tr><th style="width:25%">Cambio</th><th style="width:33%">Valor</th><th>Por qué</th></tr>
 <tr><td>Readiness por saturación</td><td>El pod sale del balanceo si su retraso del bucle pasa de 50 ms. Se revisa cada 5 s y sale tras 2 fallos (antes, 30 s).</td><td>En la ronda 0 el pod saturado superó 50 ms en 27 de 36 muestras y el sano en 2 de 36.</td></tr>
 <tr><td>CPU del pod</td><td>Request 200 m y límite 500 m (antes 100 m y 250 m).</td><td>Con 250 m los pods ya estaban al límite sin ninguna falla.</td></tr>
 <tr><td>HPA</td><td>Autoescalado por CPU al 60 %, entre 2 y 4 réplicas.</td><td>Más capacidad cuando un pod rinde menos, en vez de cargar a los demás.</td></tr>
 </table>
 <p class="nota">Las tres son solo configuración: el código de la API es el mismo en las dos rondas. El umbral de 50 ms sale de los datos de la ronda 0.</p>
 
-<h2>4. Ronda 1</h2>
+<div style="break-inside: avoid"><h2>4. Ronda 1</h2>
 <p>Mismo perfil, mismo fallo, misma duración, y el pod elegido otra vez el primero de los pods vivos.</p>
 <table><tr><th>Métrica</th><th>Estado estable</th><th>Ronda 0</th><th>Ronda 1</th><th>Ronda 1 frente a ronda 0</th></tr>
-<tr><td>Éxito</td><td>100 %</td><td>100 %</td><td>100 %</td><td>igual</td></tr><tr><td>p50</td><td>450 ms</td><td>400 ms</td><td>405 ms</td><td>+1,2 %</td></tr><tr><td>p95</td><td>1.208 ms</td><td>3.425 ms</td><td>774 ms</td><td>−77,4 %</td></tr><tr><td>p99</td><td>1.714 ms</td><td>4.596 ms</td><td>1.082 ms</td><td>−76,5 %</td></tr><tr><td>Máximo</td><td>sin medir</td><td>5.945 ms</td><td>1.571 ms</td><td>−73,6 %</td></tr><tr><td>Flujos completados</td><td>3.634</td><td>2.682</td><td>4.264</td><td>+59,0 %</td></tr></table>
+<tr><td>Éxito</td><td>100 %</td><td>100 %</td><td>100 %</td><td>igual</td></tr><tr><td>p50</td><td>450 ms</td><td>400 ms</td><td>405 ms</td><td>+1,2 %</td></tr><tr><td>p95</td><td>1.208 ms</td><td>3.425 ms</td><td>774 ms</td><td>−77,4 %</td></tr><tr><td>p99</td><td>1.714 ms</td><td>4.596 ms</td><td>1.082 ms</td><td>−76,5 %</td></tr><tr><td>Máximo</td><td>sin medir</td><td>5.945 ms</td><td>1.571 ms</td><td>−73,6 %</td></tr><tr><td>Flujos completados</td><td>3.634</td><td>2.682</td><td>4.264</td><td>+59,0 %</td></tr></table></div>
 <p>El pod saturado siguió consumiendo CPU toda la ventana (se quedó en su límite de 500 m, con picos medidos de 512 m; en la ronda 0 fue el límite de 250 m, con picos de 276 m). Lo que cambió es cuánto tráfico le llegó: 5 % de las llamadas en la ronda 1 contra 14 % en la 0. Sus respuestas siguieron siendo más lentas que las de los demás (p95 de 569 ms contra 28 a 43 ms), pero ya no mandaban sobre la cola. A los 60 s de empezar la carga el HPA ya había subido el servicio a 4 réplicas.</p>
-<p><img src="reparto.png" width="330"/></p>
+<p><img src="../tablero/reparto.png" style="width:60%"/></p>
 <p><b>Conclusión.</b> La hipótesis se refuta en la ronda 0 y se cumple en la ronda 1. Con una sola ejecución por ronda y las tres mejoras juntas no podemos decir cuánto aportó cada una, y la ronda 1 además tiene más CPU por pod que la 0. El p95 de k6 incluye la red y las otras dos nubes.</p>
 
 <h2>5. Lo que aprendimos</h2>
@@ -81,7 +85,7 @@ th { background-color: #eef3f9; text-align: left; }
 <p>Riesgo que sigue abierto: si todos los pods se saturaran a la vez, la readiness por saturación dejaría el balanceador sin destinos y la caída sería total.</p>
 
 <h2>Pendiente de resiliencia</h2>
-<table><tr><th width="9%">Prioridad</th><th>Qué hacer</th></tr>
+<table><tr><th style="width:11%">Prioridad</th><th>Qué hacer</th></tr>
 <tr><td>Alta</td><td>Límite de concurrencia por pod que responda 503 rápido en lugar de encolar, y tiempos de espera y circuito abierto en las llamadas de trading-journal.</td></tr>
 <tr><td>Alta</td><td>Alerta sobre el retraso del bucle y el p95 por pod: hoy esta falla solo se ve mirando el tablero.</td></tr>
 <tr><td>Media</td><td>HPA por latencia o peticiones por segundo además de CPU, y nodos de reserva para no esperar a uno nuevo.</td></tr>
