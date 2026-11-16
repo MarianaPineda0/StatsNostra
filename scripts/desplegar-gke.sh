@@ -52,18 +52,18 @@ URL_BASE="$(gcloud secrets versions access latest --secret=statsnostra-v5-databa
   --project="${PROJECT_ID}")"
 if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${URL_BASE}"; fi
 # Grafana Cloud es opcional: sin el token en Secret Manager, OpenTelemetry queda apagado
-# y la API funciona igual. El usuario (el id de la instancia) y el token se guardan en dos
-# secretos aparte para que el despliegue no dependa de tenerlos.
+# y la API funciona igual. El token vive en Secret Manager; el usuario es el id de la instancia
+# de Grafana (no es secreto) y el gateway es el de la región de ese stack.
 leer_secreto() {
   gcloud secrets versions access latest --secret="$1" --project="${PROJECT_ID}" 2>/dev/null || true
 }
 TOKEN_OTLP="$(leer_secreto statsnostra-v5-grafana-otlp-token)"
-export GRAFANA_OTLP_USER
-GRAFANA_OTLP_USER="$(leer_secreto statsnostra-v5-grafana-otlp-usuario)"
+export GRAFANA_OTLP_USER=""
 export GRAFANA_OTLP_ENDPOINT=""
 args_otlp=()
-if [ -n "${TOKEN_OTLP}" ] && [ -n "${GRAFANA_OTLP_USER}" ]; then
-  GRAFANA_OTLP_ENDPOINT="https://otlp-gateway-prod-us-east-3.grafana.net/otlp"
+if [ -n "${TOKEN_OTLP}" ]; then
+  GRAFANA_OTLP_USER="1926427"
+  GRAFANA_OTLP_ENDPOINT="https://otlp-gateway-prod-us-east-6.grafana.net/otlp"
   args_otlp=(--from-literal=GRAFANA_OTLP_TOKEN="${TOKEN_OTLP}")
   if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${TOKEN_OTLP}"; fi
 fi
