@@ -1,0 +1,54 @@
+<html><head><meta charset="utf-8"><title>StatsNostra: sección del informe de caos</title>
+<style>
+@page { size: A4; margin: 15mm 16mm; }
+body { font-family: "Times New Roman", Times, serif; font-size: 11.5pt; line-height: 1.4; color: #1b2437; margin: 0; }
+h1 { font-size: 24pt; margin: 0 0 2pt 0; color: #14213d; line-height: 1.15; }
+h2 { font-size: 15pt; margin: 16pt 0 5pt 0; color: #1f5fae; break-after: avoid; }
+p { margin: 4pt 0 6pt 0; }
+img { display: block; margin: 6pt auto; max-width: 100%; break-inside: avoid; }
+table { border-collapse: collapse; margin: 5pt 0 9pt 0; width: 100%; break-inside: avoid; }
+th, td { border: 0.6pt solid #c3cad6; padding: 3.5pt 6pt; font-size: 10.5pt; text-align: left; vertical-align: top; }
+th { background-color: #eaf1fb; color: #14213d; }
+.sub { color: #4b5563; font-size: 12pt; margin: 0 0 10pt 0; }
+.tarjetas { border: none; margin: 0 0 8pt 0; border-spacing: 8pt 0; border-collapse: separate; }
+.tarjetas td { border: none; border-radius: 6pt; padding: 9pt 11pt; width: 33%; }
+.grande { font-size: 28pt; font-weight: bold; line-height: 1.1; }
+.pequeno { font-size: 10pt; color: #374151; }
+.nota { color: #4b5563; font-size: 10pt; }
+.hipotesis { background-color: #eaf1fb; border-left: 4pt solid #3b8eea; padding: 7pt 10pt; margin: 8pt 0; }
+</style>
+</head><body>
+<h1 style="font-size: 20pt">StatsNostra: agotamiento de CPU de un pod</h1>
+<p class="sub">Sección del informe de caos · API StatsNostra en GKE</p>
+<table class="tarjetas"><tr>
+<td style="background-color:#f3ecf8"><span class="pequeno">Ronda 0, sin mejoras</span><br/>
+<span class="grande" style="color:#5b2a86">3.425 ms</span><br/><span class="pequeno">p95 del flujo. Límite aceptado: 1.511 ms. No se cumple.</span></td>
+<td style="background-color:#e6f6ed"><span class="pequeno">Ronda 1, con mejoras</span><br/>
+<span class="grande" style="color:#0b7a3b">774 ms</span><br/><span class="pequeno">p95 del flujo. Se cumple, 77 % menos que en la ronda 0.</span></td>
+<td style="background-color:#e8f1fd"><span class="pequeno">Errores en las dos rondas</span><br/>
+<span class="grande" style="color:#1f5fae">0</span><br/><span class="pequeno">El servicio contestó siempre; lo que falló fue la rapidez.</span></td>
+</tr></table>
+
+<h2>Hipótesis, métrica y método</h2>
+<table>
+<tr><th style="width:22%">Hipótesis</th><td>Si la CPU de un pod de StatsNostra llega al 100 % durante 3 minutos, el flujo mantiene un éxito de al menos 99 % y un p95 de a lo sumo 1.511 ms (el p95 del estado estable, 1.208 ms, más un 25 %).</td></tr>
+<tr><th>Métrica e instrumento</th><td>p95 y éxito del flujo con k6 (5, 15 y 30 usuarios, 60 s cada tramo); además, el retraso del bucle de eventos y la CPU de cada pod, y los logs por trace id.</td></tr>
+<tr><th>Falla y alcance</th><td>Un hilo del pod consume CPU 180 s (POST /fault/cpu); un solo pod, el otro no se toca.</td></tr>
+<tr><th>Aborto y reversión</th><td>Éxito &lt; 50 %, p95 &gt; 15 s durante 30 s, o no poder detener el consumo. DELETE /fault/cpu y apagar el interruptor, probados antes de la primera ronda.</td></tr>
+</table>
+
+<h2>Resultados</h2>
+<p><img src="../tablero/resultados.png" style="width:100%"/></p>
+<table><tr><th>Métrica</th><th>Estado estable</th><th>Ronda 0</th><th>Ronda 1</th><th>Ronda 1 frente a 0</th></tr>
+<tr><td>Éxito</td><td>100 %</td><td>100 %</td><td>100 %</td><td>igual</td></tr><tr><td>p50</td><td>450 ms</td><td>400 ms</td><td>405 ms</td><td>+1,2 %</td></tr><tr><td>p95</td><td>1.208 ms</td><td>3.425 ms</td><td>774 ms</td><td>−77,4 %</td></tr><tr><td>p99</td><td>1.714 ms</td><td>4.596 ms</td><td>1.082 ms</td><td>−76,5 %</td></tr><tr><td>Máximo</td><td>sin medir</td><td>5.945 ms</td><td>1.571 ms</td><td>−73,6 %</td></tr><tr><td>Flujos completados</td><td>3.634</td><td>2.682</td><td>4.264</td><td>+59,0 %</td></tr></table>
+<p>En la ronda 0 el pod saturado no dio errores, contestó tarde: p50 de 1.490 ms y p95 de 2.615 ms, contra un p95 de 110 ms del pod sano. Su retraso del bucle subió de 1 ms a una mediana de 79 ms. El trace id k6-1-134 lo muestra con la misma petición en las dos rondas:</p>
+<table><tr><th>Llamada a StatsNostra</th><th>Ronda 0</th><th>Ronda 1</th></tr>
+<tr><td>partidos</td><td>2.399 ms (pod saturado)</td><td>19 ms (pod sano)</td></tr><tr><td>predicciones</td><td>3.704 ms (pod saturado)</td><td>18 ms (pod sano)</td></tr></table>
+
+<h2>Mejoras aplicadas</h2>
+<p>Tres cambios de configuración, sin tocar el código: la sonda de readiness saca del balanceo al pod cuyo retraso del bucle pasa de 50 ms (en la ronda 0 el pod saturado lo superó en 27 de 36 muestras y el sano en 2 de 36); CPU de 200 m con límite de 500 m (antes 100 m y 250 m); y HPA al 60 % entre 2 y 4 réplicas. A los 60 s de empezar la carga el HPA ya había subido a 4 réplicas. Las tres mejoras se aplicaron juntas, así que no se separa lo que aportó cada una.</p>
+
+<h2>Hallazgos y pendientes</h2>
+<p>Un pod lento no da errores: el éxito no lo ve, solo la latencia o la saturación. En estado estable los pods ya llegaban a 310 m, por encima de su límite de 250 m. Una sola ejecución por ronda, y las rondas se midieron con OpenTelemetry apagado. Pendiente: límite de concurrencia que responda 503 rápido, alerta sobre el retraso del bucle y el p95 por pod, y HPA por latencia además de CPU.</p>
+<p class="nota">Informe completo de StatsNostra: caos/informe/informe-caos-statsnostra.pdf. Datos y gráficas: caos/tablero/.</p>
+</body></html>

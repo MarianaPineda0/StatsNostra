@@ -294,7 +294,45 @@ th {{ background-color: #eaf1fb; color: #14213d; }}
 </body></html>
 """
 
+CSS = HTML[HTML.index("<style>") : HTML.index("</style>") + len("</style>")]
+TARJETAS = HTML[
+    HTML.index('<table class="tarjetas">') : HTML.index("</table>") + len("</table>")
+]
+
+SECCION = f"""<html><head><meta charset="utf-8"><title>StatsNostra: sección del informe de caos</title>
+{CSS}
+</head><body>
+<h1 style="font-size: 20pt">StatsNostra: agotamiento de CPU de un pod</h1>
+<p class="sub">Sección del informe de caos · API StatsNostra en GKE</p>
+{TARJETAS}
+
+<h2>Hipótesis, métrica y método</h2>
+<table>
+<tr><th style="width:22%">Hipótesis</th><td>Si la CPU de un pod de StatsNostra llega al 100 % durante 3 minutos, el flujo mantiene un éxito de al menos 99 % y un p95 de a lo sumo {n(X)} ms (el p95 del estado estable, {n(mediana['p95_ms'])} ms, más un 25 %).</td></tr>
+<tr><th>Métrica e instrumento</th><td>p95 y éxito del flujo con k6 (5, 15 y 30 usuarios, 60 s cada tramo); además, el retraso del bucle de eventos y la CPU de cada pod, y los logs por trace id.</td></tr>
+<tr><th>Falla y alcance</th><td>Un hilo del pod consume CPU 180 s (POST /fault/cpu); un solo pod, el otro no se toca.</td></tr>
+<tr><th>Aborto y reversión</th><td>Éxito &lt; 50 %, p95 &gt; 15 s durante 30 s, o no poder detener el consumo. DELETE /fault/cpu y apagar el interruptor, probados antes de la primera ronda.</td></tr>
+</table>
+
+<h2>Resultados</h2>
+<p><img src="../tablero/resultados.png" style="width:100%"/></p>
+<table><tr><th>Métrica</th><th>Estado estable</th><th>Ronda 0</th><th>Ronda 1</th><th>Ronda 1 frente a 0</th></tr>
+{filas_comparacion}</table>
+<p>En la ronda 0 el pod saturado no dio errores, contestó tarde: p50 de {n(sat0['p50_ms'])} ms y p95 de {n(sat0['p95_ms'])} ms, contra un p95 de {n(sano0['p95_ms'])} ms del pod sano. Su retraso del bucle subió de {dec(lag0['sano_med'], 0)} ms a una mediana de {dec(lag0['sat_med'], 0)} ms. El trace id {traza['id']} lo muestra con la misma petición en las dos rondas:</p>
+<table><tr><th>Llamada a StatsNostra</th><th>Ronda 0</th><th>Ronda 1</th></tr>
+{filas_traza}</table>
+
+<h2>Mejoras aplicadas</h2>
+<p>Tres cambios de configuración, sin tocar el código: la sonda de readiness saca del balanceo al pod cuyo retraso del bucle pasa de 50 ms (en la ronda 0 el pod saturado lo superó en {lag0['sat_sobre']} de {lag0['sat_n']} muestras y el sano en {lag0['sano_sobre']} de {lag0['sano_n']}); CPU de 200 m con límite de 500 m (antes 100 m y 250 m); y HPA al 60 % entre 2 y 4 réplicas. A los {n(hpa_s)} s de empezar la carga el HPA ya había subido a 4 réplicas. Las tres mejoras se aplicaron juntas, así que no se separa lo que aportó cada una.</p>
+
+<h2>Hallazgos y pendientes</h2>
+<p>Un pod lento no da errores: el éxito no lo ve, solo la latencia o la saturación. En estado estable los pods ya llegaban a {n(cpu_estable)} m, por encima de su límite de 250 m. Una sola ejecución por ronda, y las rondas se midieron con OpenTelemetry apagado. Pendiente: límite de concurrencia que responda 503 rápido, alerta sobre el retraso del bucle y el p95 por pod, y HPA por latencia además de CPU.</p>
+<p class="nota">Informe completo de StatsNostra: caos/informe/informe-caos-statsnostra.pdf. Datos y gráficas: caos/tablero/.</p>
+</body></html>
+"""
+
 (AQUI / "informe-caos-statsnostra.html").write_text(HTML, encoding="utf-8")
+(AQUI / "seccion-statsnostra.html").write_text(SECCION, encoding="utf-8")
 
 
 def navegador() -> str:
@@ -311,23 +349,28 @@ def navegador() -> str:
     raise SystemExit("No encontré Edge ni Chrome para imprimir el PDF")
 
 
-salida = AQUI / "informe-caos-statsnostra.pdf"
-subprocess.run(
-    [
-        navegador(),
-        "--headless=new",
-        "--disable-gpu",
-        "--no-pdf-header-footer",
-        f"--print-to-pdf={salida}",
-        (AQUI / "informe-caos-statsnostra.html").as_uri(),
-    ],
-    check=True,
-    capture_output=True,
-    timeout=120,
-)
-try:
-    import pymupdf
+def imprimir(nombre: str) -> None:
+    salida = AQUI / f"{nombre}.pdf"
+    subprocess.run(
+        [
+            navegador(),
+            "--headless=new",
+            "--disable-gpu",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={salida}",
+            (AQUI / f"{nombre}.html").as_uri(),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=120,
+    )
+    try:
+        import pymupdf
 
-    print("páginas:", pymupdf.open(str(salida)).page_count)
-except ImportError:
-    print("PDF escrito en", salida)
+        print(f"{nombre}: {pymupdf.open(str(salida)).page_count} páginas")
+    except ImportError:
+        print("PDF escrito en", salida)
+
+
+imprimir("informe-caos-statsnostra")
+imprimir("seccion-statsnostra")
