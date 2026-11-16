@@ -1,0 +1,124 @@
+# Aislamiento de red de la API: denegación por defecto de entrada y salida y permisos explícitos
+# solo para lo que el flujo necesita. Las comprobó el experimento de exposición y segmentación
+# (seguridad/): con estas políticas el flujo completo sigue funcionando y un pod de otro
+# namespace ya no puede llamar a la API ni salir a Internet. Las aplica el despliegue y, si la
+# API deja de responder con ellas puestas, las quita (scripts/desplegar-gke.sh).
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: denegar-todo
+  namespace: statsnostra
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Entrada a la API: el trÃ¡fico pÃºblico llega por el Service, desde Internet, desde los nodos
+# (que reenvÃ­an el trÃ¡fico del balanceador) y desde los rangos de sondeo de Google. Los pods de
+# otros namespaces no entran: las ipBlock no cubren las IP de los pods del clÃºster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-entrada
+  namespace: statsnostra
+spec:
+  podSelector:
+    matchLabels:
+      app: statsnostra-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        - ipBlock:
+            cidr: 10.10.0.0/24
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Salida de la API y del Cloud SQL Auth Proxy: DNS, el servidor de metadatos, la API de Cloud
+# SQL (443) y la base (3307). Nada mÃ¡s: un pod comprometido no puede salir a cualquier puerto.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-salida
+  namespace: statsnostra
+spec:
+  podSelector:
+    matchLabels:
+      app: statsnostra-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - ipBlock:
+            cidr: 169.254.20.10/32
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 3307
+---
+# El Job de migraciÃ³n de cada despliegue necesita lo mismo que la API para llegar a la base
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: migracion-salida
+  namespace: statsnostra
+spec:
+  podSelector:
+    matchLabels:
+      job-name: statsnostra-migracion
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - ipBlock:
+            cidr: 169.254.20.10/32
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 3307
