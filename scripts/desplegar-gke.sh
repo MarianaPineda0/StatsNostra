@@ -51,9 +51,26 @@ kubectl apply -f k8s/namespace.yaml
 URL_BASE="$(gcloud secrets versions access latest --secret=statsnostra-v5-database-url \
   --project="${PROJECT_ID}")"
 if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${URL_BASE}"; fi
+# Grafana Cloud es opcional: sin el token en Secret Manager, OpenTelemetry queda apagado
+# y la API funciona igual. El usuario (el id de la instancia) y el token se guardan en dos
+# secretos aparte para que el despliegue no dependa de tenerlos.
+leer_secreto() {
+  gcloud secrets versions access latest --secret="$1" --project="${PROJECT_ID}" 2>/dev/null || true
+}
+TOKEN_OTLP="$(leer_secreto statsnostra-v5-grafana-otlp-token)"
+export GRAFANA_OTLP_USER
+GRAFANA_OTLP_USER="$(leer_secreto statsnostra-v5-grafana-otlp-usuario)"
+export GRAFANA_OTLP_ENDPOINT=""
+args_otlp=()
+if [ -n "${TOKEN_OTLP}" ] && [ -n "${GRAFANA_OTLP_USER}" ]; then
+  GRAFANA_OTLP_ENDPOINT="https://otlp-gateway-prod-us-east-3.grafana.net/otlp"
+  args_otlp=(--from-literal=GRAFANA_OTLP_TOKEN="${TOKEN_OTLP}")
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${TOKEN_OTLP}"; fi
+fi
 kubectl create secret generic statsnostra-secrets --namespace "${NAMESPACE}" \
-  --from-literal=DATABASE_URL="${URL_BASE}" --dry-run=client -o yaml | kubectl apply -f -
-unset URL_BASE
+  --from-literal=DATABASE_URL="${URL_BASE}" "${args_otlp[@]}" --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset URL_BASE TOKEN_OTLP
 
 envsubst < k8s/configmap.yaml | kubectl apply -f -
 
