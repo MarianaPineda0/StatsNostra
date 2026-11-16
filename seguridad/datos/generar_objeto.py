@@ -1,13 +1,14 @@
 """Genera el objeto sintético de StatsNostra para el experimento 4 (resiliencia de los datos).
 
-El objeto es una predicción con la forma real de la API (PrediccionRespuesta) y datos inventados.
-Junto al archivo se escribe <nombre>.sha256 en el formato de sha256sum ("hash  nombre"), y el
-hash se calcula sobre los bytes del archivo tal cual: UTF-8, saltos de línea LF y una línea final.
-Para que Git no los cambie, seguridad/datos/objetos/ se marca como binario en .gitattributes.
+El objeto es una predicción con la forma real de la API (PrediccionRespuesta) y datos
+inventados. Junto al archivo se escribe <nombre>.sha256 en el formato de sha256sum
+("hash  nombre"), y el hash se calcula sobre los bytes del archivo tal cual: UTF-8, saltos
+de línea LF y una línea final. Para que Git no los cambie, seguridad/datos/objetos/ se marca
+como binario en .gitattributes.
 
 Uso:
     python seguridad/datos/generar_objeto.py            escribe el objeto y su .sha256
-    python seguridad/datos/generar_objeto.py verificar  comprueba que el archivo coincide con su hash
+    python seguridad/datos/generar_objeto.py verificar  comprueba el archivo contra su hash
 """
 
 import hashlib
