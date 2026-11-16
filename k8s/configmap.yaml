@@ -31,6 +31,9 @@ data:
   ECOMMERCE_API_URL: ""
   REDIS_HOST: ""
 
-  # Nombre propio en las métricas de Grafana Cloud (el endpoint y el token van
-  # en el Secret, y sin ellos OpenTelemetry queda apagado)
-  OTEL_SERVICE_NAME: "api-mari"
+  # Grafana Cloud: nombre propio en las métricas. El endpoint y el usuario los pone el
+  # despliegue solo si encuentra el token en Secret Manager; vacíos, OpenTelemetry queda
+  # apagado. El token va en el Secret, no aquí.
+  OTEL_SERVICE_NAME: "statsnostra-api"
+  GRAFANA_OTLP_ENDPOINT: "${GRAFANA_OTLP_ENDPOINT}"
+  GRAFANA_OTLP_USER: "${GRAFANA_OTLP_USER}"

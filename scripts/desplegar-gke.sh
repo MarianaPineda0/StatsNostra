@@ -51,9 +51,26 @@ kubectl apply -f k8s/namespace.yaml
 URL_BASE="$(gcloud secrets versions access latest --secret=statsnostra-v5-database-url \
   --project="${PROJECT_ID}")"
 if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${URL_BASE}"; fi
+# Grafana Cloud es opcional: sin el token en Secret Manager, OpenTelemetry queda apagado
+# y la API funciona igual. El token vive en Secret Manager; el usuario es el id de la instancia
+# de Grafana (no es secreto) y el gateway es el de la región de ese stack.
+leer_secreto() {
+  gcloud secrets versions access latest --secret="$1" --project="${PROJECT_ID}" 2>/dev/null || true
+}
+TOKEN_OTLP="$(leer_secreto statsnostra-v5-grafana-otlp-token)"
+export GRAFANA_OTLP_USER=""
+export GRAFANA_OTLP_ENDPOINT=""
+args_otlp=()
+if [ -n "${TOKEN_OTLP}" ]; then
+  GRAFANA_OTLP_USER="1926427"
+  GRAFANA_OTLP_ENDPOINT="https://otlp-gateway-prod-us-east-6.grafana.net/otlp"
+  args_otlp=(--from-literal=GRAFANA_OTLP_TOKEN="${TOKEN_OTLP}")
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::${TOKEN_OTLP}"; fi
+fi
 kubectl create secret generic statsnostra-secrets --namespace "${NAMESPACE}" \
-  --from-literal=DATABASE_URL="${URL_BASE}" --dry-run=client -o yaml | kubectl apply -f -
-unset URL_BASE
+  --from-literal=DATABASE_URL="${URL_BASE}" "${args_otlp[@]}" --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset URL_BASE TOKEN_OTLP
 
 envsubst < k8s/configmap.yaml | kubectl apply -f -
 
@@ -74,6 +91,22 @@ envsubst < k8s/deployment.yaml | kubectl apply -f -
 envsubst < k8s/service.yaml | kubectl apply -f -
 kubectl apply -f k8s/hpa.yaml
 kubectl rollout status deployment/statsnostra-api --namespace "${NAMESPACE}" --timeout=300s
+
+paso "Aislamiento de red"
+# Denegación por defecto y permisos explícitos. Si con las políticas puestas la API deja de
+# responder por la IP pública, se quitan y el despliegue falla en vez de dejar el servicio caído.
+kubectl apply -f k8s/networkpolicy.yaml
+codigo=000
+for _ in $(seq 1 12); do
+  codigo="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "http://${LB_IP}/health/ready" || true)"
+  [ "${codigo}" = 200 ] && break
+  sleep 5
+done
+if [ "${codigo}" != 200 ]; then
+  echo "La API no respondió con las NetworkPolicy puestas (último código: ${codigo}); las quito." >&2
+  kubectl delete -f k8s/networkpolicy.yaml --ignore-not-found
+  exit 1
+fi
 
 paso "Listo"
 kubectl get pods --namespace "${NAMESPACE}" -o wide
