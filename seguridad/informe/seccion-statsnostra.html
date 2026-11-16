@@ -1,0 +1,56 @@
+<html><head><meta charset="utf-8"><title>StatsNostra: sección del informe de seguridad</title>
+<style>
+@page { size: A4; margin: 15mm 16mm; }
+body { font-family: "Times New Roman", Times, serif; font-size: 11.5pt; line-height: 1.4; color: #1b2437; margin: 0; }
+h1 { font-size: 24pt; margin: 0 0 2pt 0; color: #14213d; line-height: 1.15; }
+h2 { font-size: 15pt; margin: 16pt 0 5pt 0; color: #1f5fae; break-after: avoid; }
+p { margin: 4pt 0 6pt 0; }
+img { display: block; margin: 6pt auto; max-width: 100%; break-inside: avoid; }
+table { border-collapse: collapse; margin: 5pt 0 9pt 0; width: 100%; break-inside: avoid; }
+th, td { border: 0.6pt solid #c3cad6; padding: 3.5pt 6pt; font-size: 10.5pt; text-align: left; vertical-align: top; }
+th { background-color: #eaf1fb; color: #14213d; }
+.sub { color: #4b5563; font-size: 12pt; margin: 0 0 10pt 0; }
+.tarjetas { border: none; margin: 0 0 8pt 0; border-spacing: 8pt 0; border-collapse: separate; }
+.tarjetas td { border: none; border-radius: 6pt; padding: 9pt 11pt; width: 33%; }
+.grande { font-size: 26pt; font-weight: bold; line-height: 1.1; }
+.pequeno { font-size: 10pt; color: #374151; }
+.nota { color: #4b5563; font-size: 10pt; }
+.hipotesis { background-color: #eaf1fb; border-left: 4pt solid #3b8eea; padding: 7pt 10pt; margin: 8pt 0; }
+</style>
+</head><body>
+<h1 style="font-size: 20pt">StatsNostra: exposición y segmentación</h1>
+<p class="sub">Sección del informe de seguridad (defensa en profundidad) · API StatsNostra en GKE</p>
+<table class="tarjetas"><tr>
+<td style="background-color:#f3ecf8"><span class="pequeno">Ronda 0, sin mejoras</span><br/>
+<span class="grande" style="color:#5b2a86">sin alerta</span><br/><span class="pequeno">El Service expuesto no avisó a nadie. El salto entre namespaces y la salida a Internet pasaron.</span></td>
+<td style="background-color:#e6f6ed"><span class="pequeno">Ronda 1, alerta y NetworkPolicy</span><br/>
+<span class="grande" style="color:#0b7a3b">45 s</span><br/><span class="pequeno">hasta la alerta; 15 s después se contuvo. Salto y salida, bloqueados.</span></td>
+<td style="background-color:#e8f1fd"><span class="pequeno">Credencial señuelo</span><br/>
+<span class="grande" style="color:#1f5fae">27 s</span><br/><span class="pequeno">desde que alguien abre el secreto hasta que suena la alerta.</span></td>
+</tr></table>
+
+<h2>Hipótesis, reglas y estado estable</h2>
+<p class="hipotesis"><b>Hipótesis de control.</b> Con la red tal como está hoy, cuando se cree un Service que exponga el puerto de administración, esperamos una alerta en 5 minutos o menos y su eliminación en 10 minutos o menos. Se inyectan tres rutas no declaradas a la vez: (A) el Service expuesto, (B) un pod de otro namespace que llama a la API y (C) un pod que sale a Internet sin filtro.</p>
+<p>Reglas de compromiso aceptadas por las tres APIs: solo cuentas del grupo y datos sintéticos; radio de un Service de prueba, un namespace de prueba y una NetworkPolicy; parada y reversión con tres comandos de kubectl, probados antes de la ronda 0; aborto si /health/ready no responde 200 durante más de 60 s. Las 27 acciones quedaron en la bitácora.</p>
+<p>El inventario de controles cuenta 18 activos y 5 huecos abiertos en cinco capas; 4 se activaron durante este trabajo. La línea base de la señal: el evento de creación de un Service se pudo consultar en Cloud Logging a los 28 s.</p>
+<p><img src="capas.png" style="width:80%"/></p>
+
+<h2>Cronología y resultados</h2>
+<p><img src="cronologia.png" style="width:100%"/></p>
+<table><tr><th></th><th>Ronda 0, sin mejoras</th><th>Ronda 1, alerta y NetworkPolicy</th></tr>
+<tr><td>MTTD (de la creación a la alerta)</td><td>no se detectó</td><td>45 s</td></tr>
+<tr><td>MTTC (de la alerta a la contención)</td><td>sin alerta no hubo quién contuviera</td><td>15 s</td></tr>
+<tr><td>B: salto este-oeste</td><td>pasó (HTTP 200)</td><td>bloqueado</td></tr>
+<tr><td>C: salida a Internet</td><td>pasó (HTTP 200)</td><td>bloqueada</td></tr>
+<tr><td>Cobertura de la alerta</td><td>0 de 3</td><td>1 de 3 (la A)</td></tr>
+<tr><td>Falsos positivos</td><td>sin alerta que pudiera darlos</td><td>0</td></tr>
+<tr><td>Hipótesis</td><td>se refuta: no hay alerta</td><td>se cumple</td></tr>
+</table>
+<p class="nota">En la ronda 0 la contención a los 28 s la hizo quien operaba el experimento, que ya sabía del evento; no cuenta como MTTC. El NodePort quedó sin respuesta desde fuera de la red en las dos rondas, porque el firewall solo deja pasar el puerto 80 al balanceador. Con las políticas puestas, el flujo completo siguió dando 200.</p>
+
+<h2>Mejoras, detección y tendencias</h2>
+<p><b>Alerta de Services expuestos</b> sobre el registro de auditoría de Kubernetes, con la notificación en Pub/Sub para leer la hora real. <b>NetworkPolicy</b> de denegación por defecto de entrada y salida, con entrada solo al puerto de la API y salida solo a DNS, metadatos, la API de Cloud SQL y la base. Las reglas de detección son código versionado, con 3 casos positivos y 9 negativos que corren en cada push.</p>
+<p><b>Credencial señuelo:</b> un secreto que nadie usa; abrirlo avisó a los 27 s y mirar sus metadatos no avisó (MITRE D3FEND D3-DUC y ATT&amp;CK T1552, consultados el 15 de noviembre de 2026). <b>Mínimo privilegio:</b> la cuenta que despliega pasó de 18 a 7 roles y de 9 a 1 de administración, probando cada operación del despliegue con su identidad (guía de prácticas recomendadas para cuentas de servicio de Google Cloud, consultada el 15 de noviembre de 2026).</p>
+<p><b>Riesgos y pendientes.</b> La alerta cubre una de las tres rutas: la B y la C se previenen pero no dejan señal propia, y falta una alerta sobre los flujos de red denegados. Los resultados son de una sola ejecución por ronda. La NetworkPolicy se revirtió al terminar el experimento. Habilitar los registros de lectura de Secret Manager suma volumen de logs.</p>
+<p class="nota">Informe completo de StatsNostra: seguridad/informe/informe-seguridad-statsnostra.pdf. Evidencia: seguridad/evidencia/.</p>
+</body></html>

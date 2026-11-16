@@ -180,7 +180,47 @@ th {{ background-color: #eaf1fb; color: #14213d; }}
 </body></html>
 """
 
+CSS = html[html.index("<style>") : html.index("</style>") + len("</style>")]
+TARJETAS = html[
+    html.index('<table class="tarjetas">') : html.index("</table>") + len("</table>")
+]
+
+seccion = f"""<html><head><meta charset="utf-8"><title>StatsNostra: sección del informe de seguridad</title>
+{CSS}
+</head><body>
+<h1 style="font-size: 20pt">StatsNostra: exposición y segmentación</h1>
+<p class="sub">Sección del informe de seguridad (defensa en profundidad) · API StatsNostra en GKE</p>
+{TARJETAS}
+
+<h2>Hipótesis, reglas y estado estable</h2>
+<p class="hipotesis"><b>Hipótesis de control.</b> Con la red tal como está hoy, cuando se cree un Service que exponga el puerto de administración, esperamos una alerta en {T1_S // 60} minutos o menos y su eliminación en {T2_S // 60} minutos o menos. Se inyectan tres rutas no declaradas a la vez: (A) el Service expuesto, (B) un pod de otro namespace que llama a la API y (C) un pod que sale a Internet sin filtro.</p>
+<p>Reglas de compromiso aceptadas por las tres APIs: solo cuentas del grupo y datos sintéticos; radio de un Service de prueba, un namespace de prueba y una NetworkPolicy; parada y reversión con tres comandos de kubectl, probados antes de la ronda 0; aborto si /health/ready no responde 200 durante más de 60 s. Las {n_acciones} acciones quedaron en la bitácora.</p>
+<p>El inventario de controles cuenta {total_activos + total_cerrados} activos y {total_huecos} huecos abiertos en cinco capas; {total_cerrados} se activaron durante este trabajo. La línea base de la señal: el evento de creación de un Service se pudo consultar en Cloud Logging a los {base['segundos_hasta_consultar']} s.</p>
+<p><img src="capas.png" style="width:80%"/></p>
+
+<h2>Cronología y resultados</h2>
+<p><img src="cronologia.png" style="width:100%"/></p>
+<table><tr><th></th><th>Ronda 0, sin mejoras</th><th>Ronda 1, alerta y NetworkPolicy</th></tr>
+<tr><td>MTTD (de la creación a la alerta)</td><td>no se detectó</td><td>{s(mttd1)}</td></tr>
+<tr><td>MTTC (de la alerta a la contención)</td><td>sin alerta no hubo quién contuviera</td><td>{s(mttc1)}</td></tr>
+<tr><td>B: salto este-oeste</td><td>pasó (HTTP {r0['http_este_oeste']})</td><td>bloqueado</td></tr>
+<tr><td>C: salida a Internet</td><td>pasó (HTTP {r0['http_salida']})</td><td>bloqueada</td></tr>
+<tr><td>Cobertura de la alerta</td><td>0 de 3</td><td>1 de 3 (la A)</td></tr>
+<tr><td>Falsos positivos</td><td>sin alerta que pudiera darlos</td><td>0</td></tr>
+<tr><td>Hipótesis</td><td>se refuta: no hay alerta</td><td>se cumple</td></tr>
+</table>
+<p class="nota">En la ronda 0 la contención a los {r0['segundos_hasta_contencion']} s la hizo quien operaba el experimento, que ya sabía del evento; no cuenta como MTTC. El NodePort quedó sin respuesta desde fuera de la red en las dos rondas, porque el firewall solo deja pasar el puerto 80 al balanceador. Con las políticas puestas, el flujo completo siguió dando 200.</p>
+
+<h2>Mejoras, detección y tendencias</h2>
+<p><b>Alerta de Services expuestos</b> sobre el registro de auditoría de Kubernetes, con la notificación en Pub/Sub para leer la hora real. <b>NetworkPolicy</b> de denegación por defecto de entrada y salida, con entrada solo al puerto de la API y salida solo a DNS, metadatos, la API de Cloud SQL y la base. Las reglas de detección son código versionado, con {len(positivos)} casos positivos y {len(negativos)} negativos que corren en cada push.</p>
+<p><b>Credencial señuelo:</b> un secreto que nadie usa; abrirlo avisó a los {s(mttd_senuelo)} y mirar sus metadatos no avisó (MITRE D3FEND D3-DUC y ATT&amp;CK T1552, consultados el 15 de noviembre de 2026). <b>Mínimo privilegio:</b> la cuenta que despliega pasó de {len(ci_antes['roles'])} a {len(ci_despues['roles'])} roles y de {len(ci_antes['roles_admin'])} a {len(ci_despues['roles_admin'])} de administración, probando cada operación del despliegue con su identidad (guía de prácticas recomendadas para cuentas de servicio de Google Cloud, consultada el 15 de noviembre de 2026).</p>
+<p><b>Riesgos y pendientes.</b> La alerta cubre una de las tres rutas: la B y la C se previenen pero no dejan señal propia, y falta una alerta sobre los flujos de red denegados. Los resultados son de una sola ejecución por ronda. La NetworkPolicy se revirtió al terminar el experimento. Habilitar los registros de lectura de Secret Manager suma volumen de logs.</p>
+<p class="nota">Informe completo de StatsNostra: seguridad/informe/informe-seguridad-statsnostra.pdf. Evidencia: seguridad/evidencia/.</p>
+</body></html>
+"""
+
 (AQUI / "informe-seguridad-statsnostra.html").write_text(html, encoding="utf-8")
+(AQUI / "seccion-statsnostra.html").write_text(seccion, encoding="utf-8")
 
 
 def navegador() -> str:
@@ -196,23 +236,28 @@ def navegador() -> str:
     raise SystemExit("No encontré Edge ni Chrome para imprimir el PDF")
 
 
-salida = AQUI / "informe-seguridad-statsnostra.pdf"
-subprocess.run(
-    [
-        navegador(),
-        "--headless=new",
-        "--disable-gpu",
-        "--no-pdf-header-footer",
-        f"--print-to-pdf={salida}",
-        (AQUI / "informe-seguridad-statsnostra.html").as_uri(),
-    ],
-    check=True,
-    capture_output=True,
-    timeout=120,
-)
-try:
-    import pymupdf
+def imprimir(nombre: str) -> None:
+    salida = AQUI / f"{nombre}.pdf"
+    subprocess.run(
+        [
+            navegador(),
+            "--headless=new",
+            "--disable-gpu",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={salida}",
+            (AQUI / f"{nombre}.html").as_uri(),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=120,
+    )
+    try:
+        import pymupdf
 
-    print("páginas:", pymupdf.open(str(salida)).page_count)
-except ImportError:
-    print("PDF escrito en", salida)
+        print(f"{nombre}: {pymupdf.open(str(salida)).page_count} páginas")
+    except ImportError:
+        print("PDF escrito en", salida)
+
+
+imprimir("informe-seguridad-statsnostra")
+imprimir("seccion-statsnostra")
