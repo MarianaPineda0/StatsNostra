@@ -41,6 +41,28 @@ Solo datos sintéticos del proyecto. Los experimentos no leen, copian ni envían
 - Una NetworkPolicy con denegación por defecto en `statsnostra` solo durante la ronda 1.
 - Máximo 10 peticiones por prueba. No se modifican el Service público, el Deployment ni los pods
   del API, y no se envía carga con k6 durante la ventana.
+- Un namespace `caos-seguridad` con su propia política de denegación por defecto, para aislar el
+  pod de prueba. Es un namespace del experimento, así que solo reduce el riesgo.
+
+### Tendencias (15 de noviembre, después de las rondas)
+
+Tres cambios en el proyecto de Google Cloud que no estaban en el radio de arriba y se declaran
+aquí. Ninguno toca el tráfico ni reinicia pods, y cada uno se puede deshacer:
+
+- **Secreto señuelo** `statsnostra-admin-respaldo` en Secret Manager, con un valor sintético, y
+  una alerta que avisa si alguien lo abre. Se borra al terminar la entrega.
+- **Registros de lectura de datos de Secret Manager** habilitados en el proyecto, que antes no
+  estaban. Se pueden volver a apagar quitando esa configuración de auditoría.
+- **Cuenta de servicio del despliegue** con 7 roles en el proyecto en vez de 18, más lectura de
+  un solo secreto. Cada operación del despliegue se probó suplantando a la cuenta, y
+  `seguridad/tendencias/minimo_privilegio.sh restaurar` devuelve los roles anteriores.
+
+### Experimento 4 (datos)
+
+StatsNostra aporta un único objeto sintético, una predicción en JSON, en
+`seguridad/datos/objetos/statsnostra/` con su archivo `.sha256`. No se usa ningún dato real y
+no se toca ninguna infraestructura de StatsNostra: el bucket y el ataque son los de las reglas
+del grupo (trading-journal).
 
 ## 5. Interruptor de parada
 
@@ -82,6 +104,9 @@ Se ejecuta el interruptor de parada y se anota la causa si ocurre cualquiera de 
 
 | API | Aceptado | Fecha |
 |---|---|---|
-| StatsNostra | [ ] | |
-| trading-journal | [ ] | |
-| ecommerce | [ ] | |
+| StatsNostra | [x] | 2026-11-15 |
+| trading-journal | [x] | 2026-11-15 |
+| ecommerce | [x] | 2026-11-15 |
+
+StatsNostra también acepta las reglas del grupo para los experimentos 1 y 4, publicadas en el
+repositorio de trading-journal (aceptadas el 16 de noviembre de 2026 en el chat del grupo).
