@@ -55,7 +55,7 @@ for bloque in re.split(r"^## ", inventario, flags=re.M)[1:]:
     titulo = bloque.splitlines()[0].strip()
     if titulo == "Cómo se usa":
         continue
-    cerrados = bloque.count("cerrado el 15 nov")
+    cerrados = len(re.findall(r"cerrado el \d+ nov", bloque))
     capas[titulo] = (bloque.count("| Activo") - cerrados, cerrados, bloque.count("**Hueco**"))
 filas_capas = "".join(
     f"<tr><td>{c}</td><td>{a}</td><td>{k}</td><td>{h}</td></tr>"
@@ -174,9 +174,9 @@ th {{ background-color: #eaf1fb; color: #14213d; }}
 <p><img src="identidades.png" style="width:54%"/></p>
 
 <h2>7. Lecciones, riesgos y lo que sigue</h2>
-<p>La alerta cubre una de las tres rutas: la B y la C se previenen con la política, pero no dejan una señal propia. Habilitar los registros de lectura de datos agrega volumen de logs; si crece, hay que acotarlo. Los resultados vienen de una sola ejecución por ronda. La NetworkPolicy quedó fuera del despliegue (ver el hallazgo posterior). Y la cuenta del despliegue sigue con permisos de administración de GKE, porque el despliegue crea recursos de varios tipos.</p>
-<p>Próximos experimentos: una alerta sobre los flujos denegados de la red para cubrir la B y la C, y volver a dejar la NetworkPolicy en el despliegue, ahora permitiendo el DNS local y probándola con pods recién creados.</p>
-<p>Un hallazgo posterior cambia una conclusión: el 17 de noviembre la NetworkPolicy se dejó en el despliegue y, con pods nuevos, la API empezó a fallar (500 por un tiempo de espera de 30 s hacia la base en un pod) y la exportación de telemetría a Grafana agotó el tiempo; al borrar las políticas el servicio volvió en segundos y se sacaron del despliegue. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya abiertas no necesitan resolver nombres ni renovar certificados; los pods nuevos sí. La causa probable, sin confirmar, es que falta permitir la salida de DNS hacia la caché local de nodos (node-local-dns). Antes de dejar la política de forma permanente hay que probarla con pods recién creados.</p>
+<p>La alerta cubre una de las tres rutas: la B y la C se previenen con la política, pero no dejan una señal propia. Habilitar los registros de lectura de datos agrega volumen de logs; si crece, hay que acotarlo. Los resultados vienen de una sola ejecución por ronda. La NetworkPolicy quedó permanente en el despliegue tras corregirla (ver el hallazgo posterior). Y la cuenta del despliegue sigue con permisos de administración de GKE, porque el despliegue crea recursos de varios tipos.</p>
+<p>Próximos experimentos: una alerta sobre los flujos denegados de la red para cubrir la B y la C, y filtrar la salida por destino y no solo por puerto.</p>
+<p>Un hallazgo posterior cambia una conclusión: el 17 de noviembre la NetworkPolicy se dejó en el despliegue y, con pods nuevos, la API empezó a fallar (500 por un tiempo de espera de 30 s hacia la base en un pod) y la exportación de telemetría a Grafana agotó el tiempo; al borrar las políticas el servicio volvió en segundos. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya abiertas no necesitan resolver nombres ni renovar certificados; los pods nuevos sí. La causa era que los pods resuelven por el ClusterIP de kube-dns y los nodos redirigen esa consulta a la caché local (node-local-dns), a la que las reglas no daban salida. Se añadió esa regla y se probó con DNS, conexiones nuevas, un arranque en frío y diez peticiones a la base con las políticas puestas; el despliegue repite esa prueba y las quita si falla. La política quedó permanente.</p>
 <p class="nota">Cómo reproducir: seguridad/README.md. Las gráficas salen de seguridad/evidencia/ con seguridad/informe/dibujar.py.</p>
 </body></html>
 """
@@ -215,7 +215,7 @@ seccion = f"""<html><head><meta charset="utf-8"><title>StatsNostra: sección del
 <h2>Mejoras, detección y tendencias</h2>
 <p><b>Alerta de Services expuestos</b> sobre el registro de auditoría de Kubernetes, con la notificación en Pub/Sub para leer la hora real. <b>NetworkPolicy</b> de denegación por defecto de entrada y salida, con entrada solo al puerto de la API y salida solo a DNS, metadatos, la API de Cloud SQL y la base. Las reglas de detección son código versionado, con {len(positivos)} casos positivos y {len(negativos)} negativos que corren en cada push.</p>
 <p><b>Credencial señuelo:</b> un secreto que nadie usa; abrirlo avisó a los {s(mttd_senuelo)} y mirar sus metadatos no avisó (MITRE D3FEND D3-DUC y ATT&amp;CK T1552, consultados el 15 de noviembre de 2026). <b>Mínimo privilegio:</b> la cuenta que despliega pasó de {len(ci_antes['roles'])} a {len(ci_despues['roles'])} roles y de {len(ci_antes['roles_admin'])} a {len(ci_despues['roles_admin'])} de administración, probando cada operación del despliegue con su identidad (guía de prácticas recomendadas para cuentas de servicio de Google Cloud, consultada el 15 de noviembre de 2026).</p>
-<p><b>Riesgos y pendientes.</b> La alerta cubre una de las tres rutas: la B y la C se previenen pero no dejan señal propia, y falta una alerta sobre los flujos de red denegados. Los resultados son de una sola ejecución por ronda. La NetworkPolicy se revirtió al terminar el experimento y no quedó permanente (el 17 de noviembre bloqueó conexiones nuevas de los pods a la base y a Grafana; causa probable sin confirmar: falta permitir el DNS local). Habilitar los registros de lectura de Secret Manager suma volumen de logs.</p>
+<p><b>Riesgos y pendientes.</b> La alerta cubre una de las tres rutas: la B y la C se previenen pero no dejan señal propia, y falta una alerta sobre los flujos de red denegados. Los resultados son de una sola ejecución por ronda. La NetworkPolicy se revirtió al terminar el experimento; el 17 de noviembre se dejó permanente y bloqueó las conexiones nuevas de los pods por una regla de DNS que faltaba, ya corregida y probada con un pod recién creado. Habilitar los registros de lectura de Secret Manager suma volumen de logs.</p>
 <p class="nota">Informe completo de StatsNostra: seguridad/informe/informe-seguridad-statsnostra.pdf. Evidencia: seguridad/evidencia/.</p>
 </body></html>
 """

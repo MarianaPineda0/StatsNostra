@@ -46,10 +46,10 @@ th { background-color: #eaf1fb; color: #14213d; }
 </table>
 
 <h2>2. Estado estable de seguridad</h2>
-<p>El inventario de controles de StatsNostra cuenta 18 controles activos y 5 huecos abiertos en cinco capas; 4 de esos controles se activaron durante este trabajo. Los huecos de partida eran los que explican la ronda 0: no había NetworkPolicy, ni filtrado de salida, ni alerta sobre Services.</p>
+<p>El inventario de controles de StatsNostra cuenta 20 controles activos y 3 huecos abiertos en cinco capas; 6 de esos controles se activaron durante este trabajo. Los huecos de partida eran los que explican la ronda 0: no había NetworkPolicy, ni filtrado de salida, ni alerta sobre Services.</p>
 <p><img src="capas.png" style="width:86%"/></p>
 <table><tr><th>Capa</th><th>Activos desde el inicio</th><th>Cerrados en este trabajo</th><th>Huecos abiertos</th></tr>
-<tr><td>Identidad</td><td>3</td><td>2</td><td>0</td></tr><tr><td>Red</td><td>4</td><td>0</td><td>2</td></tr><tr><td>Carga de trabajo</td><td>3</td><td>0</td><td>1</td></tr><tr><td>Datos</td><td>2</td><td>0</td><td>1</td></tr><tr><td>Detección y respuesta</td><td>2</td><td>2</td><td>1</td></tr></table>
+<tr><td>Identidad</td><td>3</td><td>2</td><td>0</td></tr><tr><td>Red</td><td>4</td><td>2</td><td>0</td></tr><tr><td>Carga de trabajo</td><td>3</td><td>0</td><td>1</td></tr><tr><td>Datos</td><td>2</td><td>0</td><td>1</td></tr><tr><td>Detección y respuesta</td><td>2</td><td>2</td><td>1</td></tr></table>
 <p>Línea base de la señal: con un Service inofensivo, el evento de creación se pudo consultar en Cloud Logging a los 28 s. Es el piso de cualquier detección que se apoye en esos registros.</p>
 
 <h2>3. Cronología</h2>
@@ -86,8 +86,8 @@ th { background-color: #eaf1fb; color: #14213d; }
 <p><img src="identidades.png" style="width:54%"/></p>
 
 <h2>7. Lecciones, riesgos y lo que sigue</h2>
-<p>La alerta cubre una de las tres rutas: la B y la C se previenen con la política, pero no dejan una señal propia. Habilitar los registros de lectura de datos agrega volumen de logs; si crece, hay que acotarlo. Los resultados vienen de una sola ejecución por ronda. La NetworkPolicy quedó fuera del despliegue (ver el hallazgo posterior). Y la cuenta del despliegue sigue con permisos de administración de GKE, porque el despliegue crea recursos de varios tipos.</p>
-<p>Próximos experimentos: una alerta sobre los flujos denegados de la red para cubrir la B y la C, y volver a dejar la NetworkPolicy en el despliegue, ahora permitiendo el DNS local y probándola con pods recién creados.</p>
-<p>Un hallazgo posterior cambia una conclusión: el 17 de noviembre la NetworkPolicy se dejó en el despliegue y, con pods nuevos, la API empezó a fallar (500 por un tiempo de espera de 30 s hacia la base en un pod) y la exportación de telemetría a Grafana agotó el tiempo; al borrar las políticas el servicio volvió en segundos y se sacaron del despliegue. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya abiertas no necesitan resolver nombres ni renovar certificados; los pods nuevos sí. La causa probable, sin confirmar, es que falta permitir la salida de DNS hacia la caché local de nodos (node-local-dns). Antes de dejar la política de forma permanente hay que probarla con pods recién creados.</p>
+<p>La alerta cubre una de las tres rutas: la B y la C se previenen con la política, pero no dejan una señal propia. Habilitar los registros de lectura de datos agrega volumen de logs; si crece, hay que acotarlo. Los resultados vienen de una sola ejecución por ronda. La NetworkPolicy quedó permanente en el despliegue tras corregirla (ver el hallazgo posterior). Y la cuenta del despliegue sigue con permisos de administración de GKE, porque el despliegue crea recursos de varios tipos.</p>
+<p>Próximos experimentos: una alerta sobre los flujos denegados de la red para cubrir la B y la C, y filtrar la salida por destino y no solo por puerto.</p>
+<p>Un hallazgo posterior cambia una conclusión: el 17 de noviembre la NetworkPolicy se dejó en el despliegue y, con pods nuevos, la API empezó a fallar (500 por un tiempo de espera de 30 s hacia la base en un pod) y la exportación de telemetría a Grafana agotó el tiempo; al borrar las políticas el servicio volvió en segundos. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya abiertas no necesitan resolver nombres ni renovar certificados; los pods nuevos sí. La causa era que los pods resuelven por el ClusterIP de kube-dns y los nodos redirigen esa consulta a la caché local (node-local-dns), a la que las reglas no daban salida. Se añadió esa regla y se probó con DNS, conexiones nuevas, un arranque en frío y diez peticiones a la base con las políticas puestas; el despliegue repite esa prueba y las quita si falla. La política quedó permanente.</p>
 <p class="nota">Cómo reproducir: seguridad/README.md. Las gráficas salen de seguridad/evidencia/ con seguridad/informe/dibujar.py.</p>
 </body></html>

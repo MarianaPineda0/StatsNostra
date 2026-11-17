@@ -25,8 +25,8 @@ trazabilidad: ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207.
 | Dataplane V2: el clúster hace cumplir las NetworkPolicy | `terraform/gke.tf` | Activo | Registros de decisiones de red | D3-NI (Network Isolation); NIST SC-7 |
 | Entrada pública solo al puerto 80 del Service, hacia el 8000 de la API | `k8s/service.yaml` | Activo | Registros de flujo | D3-ITF (Inbound Traffic Filtering); ISO 8.20 |
 | Cloud SQL sin redes autorizadas: solo se entra por el proxy | `terraform/cloudsql.tf` | Activo | Registros de Cloud SQL | D3-ITF; ISO 8.20 |
-| **NetworkPolicy** de denegación por defecto y permisos explícitos | `statsnostra` | **Hueco**: hoy no hay ninguna, todo el tráfico este-oeste está permitido | Ninguna hoy | D3-NI, D3-ITF; ISO 8.22; NIST AC-4, SC-7; NIST SP 800-207 (microsegmentación) |
-| Filtrado de salida de los pods | `statsnostra` | **Hueco**: los pods pueden salir a cualquier destino | Registros de flujo | D3-OTF (Outbound Traffic Filtering); ISO 8.23; NIST SC-7 |
+| NetworkPolicy de denegación por defecto y permisos explícitos | `statsnostra` | Activo (cerrado el 17 nov): entrada solo al puerto de la API y salida solo a DNS (incluida la caché local de nodos), metadatos, 443 y 3307; probada con un pod recién creado | Ninguna propia | D3-NI, D3-ITF; ISO 8.22; NIST AC-4, SC-7; NIST SP 800-207 (microsegmentación) |
+| Filtrado de salida de los pods | `statsnostra` | Activo (cerrado el 17 nov): solo por puerto, no por destino | Registros de flujo | D3-OTF (Outbound Traffic Filtering); ISO 8.23; NIST SC-7 |
 
 ## Carga de trabajo
 
@@ -59,8 +59,9 @@ trazabilidad: ISO/IEC 27001:2022 Anexo A, NIST SP 800-53 y NIST SP 800-207.
 
 Los huecos eran la base del experimento 2: la ronda 0 midió la detección con el control tal como
 estaba (sin alertas ni NetworkPolicy) y la ronda 1 la repitió después de cerrar dos. Los que se
-cerraron el 15 de noviembre dicen "cerrado el 15 nov" en la columna de estado; la NetworkPolicy se
-aplicó solo durante la ronda 1 y se revirtió, así que sigue como hueco hasta que se decida
+cerraron después dicen "cerrado el N nov" en la columna de estado. La NetworkPolicy se aplicó
+en la ronda 1 y se revirtió; el 17 de noviembre se dejó permanente, falló con pods nuevos por una
+regla de DNS que faltaba (la caché local de nodos), y ya está corregida y probada.
 dejarla de forma permanente. Las técnicas de ATT&CK emuladas, comprobadas en attack.mitre.org, son
 Exploit Public-Facing Application (T1190), Remote Services (T1021) y Exfiltration Over
 Alternative Protocol (T1048).

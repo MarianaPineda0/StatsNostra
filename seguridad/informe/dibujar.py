@@ -272,7 +272,7 @@ def capas() -> None:
         titulo = bloque.splitlines()[0].strip()
         if titulo == "Cómo se usa":
             continue
-        cerrados = bloque.count("cerrado el 15 nov")
+        cerrados = len(re.findall(r"cerrado el \d+ nov", bloque))
         activos = bloque.count("| Activo") - cerrados
         cuenta[titulo] = (activos, cerrados, bloque.count("**Hueco**"))
     fig, ax = plt.subplots(figsize=(9.2, 3.6))
