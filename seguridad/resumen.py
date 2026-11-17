@@ -98,6 +98,16 @@ lineas = [
     "previenen con la NetworkPolicy, pero hoy no dejan una señal propia. Es un pendiente "
     "explícito (alerta sobre los registros de flujo denegados).",
     "",
+    "## Hallazgo posterior (17 de noviembre)",
+    "",
+    "Al dejar la NetworkPolicy en el despliegue, los pods nuevos no pudieron abrir conexiones a la "
+    "base ni a Grafana: `/api/v1/partidos` dio 500 tras 30 s de espera en un pod y la exportación "
+    "de telemetría agotó el tiempo. Al borrar las políticas el servicio volvió en segundos y se "
+    "sacaron del despliegue. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya "
+    "abiertas no necesitan resolver nombres ni renovar certificados. Causa probable, sin "
+    "confirmar: falta permitir la salida de DNS hacia la caché local de nodos (node-local-dns). "
+    "Antes de volver a dejarla hay que probarla con pods recién creados.",
+    "",
 ]
 (AQUI / "resultados.md").write_text("\n".join(lineas), encoding="utf-8")
 print("\n".join(lineas))
