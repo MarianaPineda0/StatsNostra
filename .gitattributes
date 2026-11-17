@@ -1,0 +1,2 @@
+# El objeto del experimento 4 y su hash se comparan byte a byte: Git no debe tocar sus saltos de línea
+seguridad/datos/objetos/** -text

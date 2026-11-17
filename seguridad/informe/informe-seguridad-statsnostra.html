@@ -1,0 +1,93 @@
+<html><head><meta charset="utf-8"><title>Caos de seguridad en StatsNostra</title>
+<style>
+@page { size: A4; margin: 15mm 16mm; }
+body { font-family: "Times New Roman", Times, serif; font-size: 11.5pt; line-height: 1.4; color: #1b2437; margin: 0; }
+h1 { font-size: 24pt; margin: 0 0 2pt 0; color: #14213d; line-height: 1.15; }
+h2 { font-size: 15pt; margin: 16pt 0 5pt 0; color: #1f5fae; break-after: avoid; }
+p { margin: 4pt 0 6pt 0; }
+img { display: block; margin: 6pt auto; max-width: 100%; break-inside: avoid; }
+table { border-collapse: collapse; margin: 5pt 0 9pt 0; width: 100%; break-inside: avoid; }
+th, td { border: 0.6pt solid #c3cad6; padding: 3.5pt 6pt; font-size: 10.5pt; text-align: left; vertical-align: top; }
+th { background-color: #eaf1fb; color: #14213d; }
+.sub { color: #4b5563; font-size: 12pt; margin: 0 0 10pt 0; }
+.tarjetas { border: none; margin: 0 0 8pt 0; border-spacing: 8pt 0; border-collapse: separate; }
+.tarjetas td { border: none; border-radius: 6pt; padding: 9pt 11pt; width: 33%; }
+.grande { font-size: 26pt; font-weight: bold; line-height: 1.1; }
+.pequeno { font-size: 10pt; color: #374151; }
+.nota { color: #4b5563; font-size: 10pt; }
+.hipotesis { background-color: #eaf1fb; border-left: 4pt solid #3b8eea; padding: 7pt 10pt; margin: 8pt 0; }
+</style></head><body>
+
+<h1>Exposición y segmentación en StatsNostra</h1>
+<p class="sub">Experimento de caos de seguridad (defensa en profundidad) en GKE · 15 de noviembre de 2026</p>
+
+<table class="tarjetas"><tr>
+<td style="background-color:#f3ecf8"><span class="pequeno">Ronda 0, sin mejoras</span><br/>
+<span class="grande" style="color:#5b2a86">sin alerta</span><br/><span class="pequeno">El Service expuesto no avisó a nadie. El salto entre namespaces y la salida a Internet pasaron.</span></td>
+<td style="background-color:#e6f6ed"><span class="pequeno">Ronda 1, alerta y NetworkPolicy</span><br/>
+<span class="grande" style="color:#0b7a3b">45 s</span><br/><span class="pequeno">hasta la alerta; 15 s después se contuvo. Salto y salida, bloqueados.</span></td>
+<td style="background-color:#e8f1fd"><span class="pequeno">Credencial señuelo</span><br/>
+<span class="grande" style="color:#1f5fae">27 s</span><br/><span class="pequeno">desde que alguien abre el secreto hasta que suena la alerta.</span></td>
+</tr></table>
+
+<p>Nos preguntamos qué pasa si aparece una ruta que nadie declaró dentro del clúster de StatsNostra, y cuánto tardamos en verla y cerrarla. Tal como estaba, no pasaba nada: ninguna regla miraba la creación de Services. Con una alerta basada en logs y una NetworkPolicy de denegación por defecto, el aviso llegó en 45 s y las otras dos rutas quedaron cerradas.</p>
+
+<h2>1. Qué probamos y con qué reglas</h2>
+<p>Tres rutas no declaradas, inyectadas a la vez: (A) un Service que expone el puerto de administración (el 9090 del Cloud SQL Auth Proxy), (B) un pod de otro namespace que llama a la API, y (C) un pod que sale a Internet sin filtro. Las dos últimas usan un pod de prueba en un namespace aparte (caos-seguridad).</p>
+<p class="hipotesis"><b>Hipótesis de control.</b> Con la red tal como está hoy, cuando se cree un Service que exponga el puerto de administración, esperamos una alerta en 5 minutos o menos y su eliminación en 10 minutos o menos.</p>
+<table>
+<tr><th style="width:22%">Regla de compromiso</th><th>Valor acordado por las tres APIs</th></tr>
+<tr><td>Alcance</td><td>Solo cuentas y proyectos del grupo (aquí, el proyecto de Google Cloud de StatsNostra). Nada de terceros, de la Universidad ni de otros grupos.</td></tr>
+<tr><td>Datos</td><td>Solo sintéticos.</td></tr>
+<tr><td>Radio de impacto</td><td>Un Service de prueba, un namespace de prueba con un pod y una NetworkPolicy. No se tocan el Service público, el Deployment ni los pods de la API. Máximo 10 peticiones por prueba.</td></tr>
+<tr><td>Parada y reversión</td><td>Tres comandos de kubectl que borran lo creado; se verifican con el estado de Services, políticas y /health/ready. La reversión se probó antes de la ronda 0.</td></tr>
+<tr><td>Aborto</td><td>/health/ready sin responder 200 durante más de 60 s, falla del flujo completo, algo fuera del alcance, fin de la ventana, o cualquiera de las APIs pidiendo parar.</td></tr>
+<tr><td>Bitácora</td><td>27 acciones con hora, responsable y resultado en bitacora.md.</td></tr>
+</table>
+
+<h2>2. Estado estable de seguridad</h2>
+<p>El inventario de controles de StatsNostra cuenta 18 controles activos y 5 huecos abiertos en cinco capas; 4 de esos controles se activaron durante este trabajo. Los huecos de partida eran los que explican la ronda 0: no había NetworkPolicy, ni filtrado de salida, ni alerta sobre Services.</p>
+<p><img src="capas.png" style="width:86%"/></p>
+<table><tr><th>Capa</th><th>Activos desde el inicio</th><th>Cerrados en este trabajo</th><th>Huecos abiertos</th></tr>
+<tr><td>Identidad</td><td>3</td><td>2</td><td>0</td></tr><tr><td>Red</td><td>4</td><td>0</td><td>2</td></tr><tr><td>Carga de trabajo</td><td>3</td><td>0</td><td>1</td></tr><tr><td>Datos</td><td>2</td><td>0</td><td>1</td></tr><tr><td>Detección y respuesta</td><td>2</td><td>2</td><td>1</td></tr></table>
+<p>Línea base de la señal: con un Service inofensivo, el evento de creación se pudo consultar en Cloud Logging a los 28 s. Es el piso de cualquier detección que se apoye en esos registros.</p>
+
+<h2>3. Cronología</h2>
+<p>Las dos rondas se hicieron el domingo 15 de noviembre con la ventana acordada en el grupo. Cada una crea el Service a la vez que lanza B y C, mide cuándo se puede consultar el evento, espera la alerta y contiene.</p>
+<p><img src="cronologia.png" style="width:100%"/></p>
+<table style="break-inside: auto"><tr><th>Hora (Colombia)</th><th>Ronda 0</th><th>Resultado</th></tr>
+<tr><td>16:15:18</td><td>empieza</td><td>preparado el namespace caos-seguridad y el pod visitante</td></tr><tr><td>16:15:20</td><td>inyección A: creo el Service admin-expuesto (NodePort 9090)</td><td>creado a las 2026-11-15T21:15:18Z</td></tr><tr><td>16:15:22</td><td>inyección B: visitante llama a la API desde otro namespace</td><td>HTTP 200</td></tr><tr><td>16:15:23</td><td>inyección C: visitante sale a Internet (a la IP pública de la API)</td><td>HTTP 200</td></tr><tr><td>16:15:31</td><td>pruebo el NodePort 32260 desde fuera de la red</td><td>HTTP 000 (000 = sin respuesta)</td></tr><tr><td>16:15:39</td><td>detección: la regla de Services expuestos coincide</td><td>a los 7 s de la creación</td></tr><tr><td>16:15:45</td><td>alerta: no hay política de alerta</td><td>no se esperó ninguna notificación</td></tr><tr><td>16:15:46</td><td>contención: borro el Service admin-expuesto</td><td>borrado a las 2026-11-15T21:15:46Z (28 s después de crearlo)</td></tr><tr><td>16:15:48</td><td>verifico el estado inicial</td><td>servicios, políticas y /health/ready en orden</td></tr></table>
+<table style="break-inside: auto"><tr><th>Hora (Colombia)</th><th>Ronda 1</th><th>Resultado</th></tr>
+<tr><td>16:25:08</td><td>empieza</td><td>preparado el namespace caos-seguridad y el pod visitante</td></tr><tr><td>16:25:10</td><td>inyección A: creo el Service admin-expuesto (NodePort 9090)</td><td>creado a las 2026-11-15T21:25:08Z</td></tr><tr><td>16:25:17</td><td>inyección B: visitante llama a la API desde otro namespace</td><td>HTTP 000</td></tr><tr><td>16:25:25</td><td>inyección C: visitante sale a Internet (a la IP pública de la API)</td><td>HTTP 000</td></tr><tr><td>16:25:33</td><td>pruebo el NodePort 32502 desde fuera de la red</td><td>HTTP 000 (000 = sin respuesta)</td></tr><tr><td>16:25:54</td><td>detección: la regla de Services expuestos coincide</td><td>a los 21 s de la creación</td></tr><tr><td>16:26:07</td><td>alerta: llegó al tema de Pub/Sub</td><td>2026-11-15T21:25:52.952Z</td></tr><tr><td>16:26:08</td><td>contención: borro el Service admin-expuesto</td><td>borrado a las 2026-11-15T21:26:08Z (60 s después de crearlo)</td></tr><tr><td>16:26:11</td><td>verifico el estado inicial</td><td>servicios, políticas y /health/ready en orden</td></tr></table>
+<p class="nota">En la ronda 0 la contención a los 28 s la hizo quien operaba el experimento, que ya sabía del evento; no cuenta como MTTC porque nadie recibió una alerta.</p>
+
+<div style="break-inside: avoid"><h2>4. Resultados de las dos rondas</h2>
+<p><img src="resultados.png" style="width:64%"/></p></div>
+<table><tr><th></th><th>Ronda 0</th><th>Ronda 1</th></tr>
+<tr><td>MTTD (de la creación a la alerta)</td><td>no se detectó</td><td>45 s</td></tr>
+<tr><td>MTTC (de la alerta a la contención)</td><td>sin alerta no hubo quién contuviera</td><td>15 s</td></tr>
+<tr><td>Evento consultable en Cloud Logging</td><td>7 s</td><td>21 s</td></tr>
+<tr><td>Cobertura de la alerta</td><td>0 de 3 inyecciones</td><td>1 de 3 (la A)</td></tr>
+<tr><td>Falsos positivos</td><td>sin alerta que pudiera darlos</td><td>0: la única alerta fue la del Service inyectado</td></tr>
+<tr><td>Hipótesis (alerta en 5 min, contención en 10 min)</td><td>se refuta: no hay alerta</td><td>se cumple</td></tr>
+</table>
+<p>El NodePort quedó sin respuesta desde fuera de la red en las dos rondas, porque el firewall de la red del clúster solo deja pasar el puerto 80 al balanceador. La B y la C se cerraron con la política: la B falló ya en la resolución de nombres, así que para aislar la política de entrada de la API quitamos la del namespace de prueba y llamamos a la API por su ClusterIP; siguió bloqueada. Con las políticas puestas, el flujo completo por el coordinador siguió dando 200 y las dos réplicas quedaron listas.</p>
+
+<h2>5. Mejoras y detección como código</h2>
+<table><tr><th style="width:26%">Mejora</th><th>Qué es</th></tr>
+<tr><td>Alerta de Services expuestos</td><td>Política de Cloud Monitoring sobre el registro de auditoría de Kubernetes: avisa cuando se crea un Service NodePort o LoadBalancer distinto del público. La notificación llega a un tema de Pub/Sub, de donde se lee la hora real de la alerta.</td></tr>
+<tr><td>NetworkPolicy</td><td>Denegación por defecto de entrada y salida, entrada a la API solo por su puerto, y salida solo a DNS, metadatos, la API de Cloud SQL (443) y la base (3307). Se aplicó en la ronda 1 y se revirtió al terminar.</td></tr>
+</table>
+<p>Las reglas son código versionado (seguridad/deteccion/reglas.py): de una sola definición salen el filtro de Cloud Logging y la evaluación de los casos de prueba. Hay 3 casos positivos y 9 negativos, que incluyen el flujo normal del despliegue, y corren con el resto de las pruebas en cada push.</p>
+
+<h2>6. Tendencias verificables</h2>
+<p><b>Credencial señuelo.</b> Un secreto que ninguna aplicación usa (statsnostra-admin-respaldo, con un valor sintético) y que dispara una alerta al abrirse. Para verlo hubo que habilitar los registros de lectura de datos de Secret Manager, que antes no estaban. Abrirlo avisó a los 27 s; mirar sus metadatos sin abrirlo no avisó. Referencias: MITRE D3FEND, técnica D3-DUC (Decoy User Credential), y ATT&CK T1552 (Unsecured Credentials), consultadas el 15 de noviembre de 2026; documentación de registros de auditoría de Secret Manager de Google Cloud, consultada el 15 de noviembre de 2026.</p>
+<p><b>Identidades de máquina con mínimo privilegio.</b> Se inventariaron las 3 cuentas de servicio del proyecto: ninguna tiene llaves creadas por el usuario. La cuenta que usa GitHub Actions para desplegar tenía 18 roles, 9 de ellos de administración, heredados de entregas anteriores. Se redujo a 7 roles (uno de administración, el de GKE) más permiso de lectura sobre un solo secreto, y cada operación del despliegue se probó suplantando a la cuenta antes de dar el cambio por bueno. Referencia: guía de prácticas recomendadas para cuentas de servicio de Google Cloud (privilegio mínimo y evitar las llaves de cuenta de servicio), consultada el 15 de noviembre de 2026.</p>
+<p><img src="identidades.png" style="width:54%"/></p>
+
+<h2>7. Lecciones, riesgos y lo que sigue</h2>
+<p>La alerta cubre una de las tres rutas: la B y la C se previenen con la política, pero no dejan una señal propia. Habilitar los registros de lectura de datos agrega volumen de logs; si crece, hay que acotarlo. Los resultados vienen de una sola ejecución por ronda. La NetworkPolicy quedó fuera del despliegue (ver el hallazgo posterior). Y la cuenta del despliegue sigue con permisos de administración de GKE, porque el despliegue crea recursos de varios tipos.</p>
+<p>Próximos experimentos: una alerta sobre los flujos denegados de la red para cubrir la B y la C, y volver a dejar la NetworkPolicy en el despliegue, ahora permitiendo el DNS local y probándola con pods recién creados.</p>
+<p>Un hallazgo posterior cambia una conclusión: el 17 de noviembre la NetworkPolicy se dejó en el despliegue y, con pods nuevos, la API empezó a fallar (500 por un tiempo de espera de 30 s hacia la base en un pod) y la exportación de telemetría a Grafana agotó el tiempo; al borrar las políticas el servicio volvió en segundos y se sacaron del despliegue. En la ronda 1 el flujo seguía dando 200 porque las conexiones ya abiertas no necesitan resolver nombres ni renovar certificados; los pods nuevos sí. La causa probable, sin confirmar, es que falta permitir la salida de DNS hacia la caché local de nodos (node-local-dns). Antes de dejar la política de forma permanente hay que probarla con pods recién creados.</p>
+<p class="nota">Cómo reproducir: seguridad/README.md. Las gráficas salen de seguridad/evidencia/ con seguridad/informe/dibujar.py.</p>
+</body></html>

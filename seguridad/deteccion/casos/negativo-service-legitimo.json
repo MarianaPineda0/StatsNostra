@@ -1,0 +1,27 @@
+{
+  "logName": "projects/project-3f57bb8c-371e-4b9c-949/logs/cloudaudit.googleapis.com%2Factivity",
+  "timestamp": "2026-11-16T15:00:00Z",
+  "resource": {
+    "type": "k8s_cluster",
+    "labels": {
+      "cluster_name": "statsnostra-v5-gke",
+      "location": "us-central1-a"
+    }
+  },
+  "protoPayload": {
+    "methodName": "io.k8s.core.v1.services.create",
+    "resourceName": "core/v1/namespaces/statsnostra/services/statsnostra-api-service",
+    "request": {
+      "kind": "Service",
+      "spec": {
+        "type": "LoadBalancer",
+        "ports": [
+          {
+            "port": 80,
+            "targetPort": 80
+          }
+        ]
+      }
+    }
+  }
+}

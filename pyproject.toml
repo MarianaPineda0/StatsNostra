@@ -16,3 +16,6 @@ ignore = ["B008"]
 [tool.ruff.lint.per-file-ignores]
 # El informe es una plantilla HTML dentro de un f-string: las líneas largas son el texto
 "caos/informe/generar_informe.py" = ["E501"]
+"seguridad/informe/generar_informe.py" = ["E501"]
+# Las filas de la tabla de resultados son texto de Markdown
+"seguridad/resumen.py" = ["E501"]
