@@ -10,15 +10,17 @@ class FormateadorJSON(logging.Formatter):
     Logging la parsee sola y se pueda filtrar por jsonPayload.trace_id."""
 
     def format(self, record: logging.LogRecord) -> str:
-        return json.dumps(
-            {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "level": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-                "trace_id": trace_id_var.get() or None,
-            }
-        )
+        linea = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "trace_id": trace_id_var.get() or None,
+        }
+        # Campos propios de un evento (logger.info(..., extra={"datos": {...}})),
+        # al nivel raiz para poder usarlos en metricas basadas en logs
+        linea.update(getattr(record, "datos", None) or {})
+        return json.dumps(linea)
 
 
 def configurar_logging(nivel: str) -> None:

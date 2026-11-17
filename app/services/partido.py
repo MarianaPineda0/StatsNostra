@@ -1,9 +1,13 @@
+import logging
+
 from app.core.exceptions import RecursoNoEncontrado, ReglaDeNegocioViolada
 from app.models.partido import EstadoPartido, Partido
 from app.repositories.partido import PartidoRepository
 from app.repositories.prediccion import PrediccionRepository
 from app.schemas.partido import PartidoActualizar, PartidoCrear, PartidoFinalizar
 from app.services.puntos import calcular_puntos
+
+logger = logging.getLogger(__name__)
 
 
 class PartidoService:
@@ -70,5 +74,17 @@ class PartidoService:
             )
             prediccion.acertada = acertada
             prediccion.puntos = puntos
+            # Metrica de negocio: la tasa de aciertos por track sale de
+            # contar estos eventos (ver la metrica basada en logs)
+            logger.info(
+                "prediccion evaluada",
+                extra={
+                    "datos": {
+                        "evento": "prediccion_evaluada",
+                        "acertada": acertada,
+                        "puntos": puntos,
+                    }
+                },
+            )
 
         return self.repositorio.actualizar(partido)

@@ -11,6 +11,14 @@ env/
 .env.gcp
 k8s/secret.yaml
 
+# Terraform: providers descargados, estado y variables locales
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+crash.log
+
 # Cobertura y reportes de pruebas
 .coverage
 htmlcov/

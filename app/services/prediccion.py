@@ -20,7 +20,7 @@ class PrediccionService:
         self.apostadores = apostadores
         self.partidos = partidos
 
-    def crear(self, datos: PrediccionCrear) -> Prediccion:
+    def crear(self, datos: PrediccionCrear, confianza: int | None = None) -> Prediccion:
         # Regla 2: el apostador debe existir
         apostador = self.apostadores.obtener_por_id(datos.apostador_id)
         if apostador is None:
@@ -50,6 +50,7 @@ class PrediccionService:
             partido_id=datos.partido_id,
             goles_local_pred=datos.goles_local_pred,
             goles_visitante_pred=datos.goles_visitante_pred,
+            confianza=confianza,
         )
         return self.repositorio.crear(prediccion)
 
@@ -62,7 +63,12 @@ class PrediccionService:
             raise RecursoNoEncontrado(f"Predicción {prediccion_id} no encontrada")
         return prediccion
 
-    def actualizar(self, prediccion_id: int, datos: PrediccionActualizar) -> Prediccion:
+    def actualizar(
+        self,
+        prediccion_id: int,
+        datos: PrediccionActualizar,
+        confianza: int | None = None,
+    ) -> Prediccion:
         prediccion = self.obtener(prediccion_id)
         partido = self.partidos.obtener_por_id(prediccion.partido_id)
         if partido is not None and partido.estado == EstadoPartido.FINALIZADO:
@@ -74,6 +80,8 @@ class PrediccionService:
             prediccion.goles_local_pred = datos.goles_local_pred
         if datos.goles_visitante_pred is not None:
             prediccion.goles_visitante_pred = datos.goles_visitante_pred
+        if confianza is not None:
+            prediccion.confianza = confianza
 
         return self.repositorio.actualizar(prediccion)
 

@@ -8,6 +8,7 @@ from app.repositories.partido import PartidoRepository
 from app.repositories.prediccion import PrediccionRepository
 from app.services.apostador import ApostadorService
 from app.services.apostador_v2 import ApostadorV2Service
+from app.services.apostador_v4 import ApostadorV4Service
 from app.services.consulta import ConsultaService
 from app.services.partido import PartidoService
 from app.services.partido_v2 import PartidoV2Service
@@ -25,6 +26,10 @@ def get_apostador_service(db: Session = Depends(get_db)) -> ApostadorService:
 
 def get_apostador_v2_service(db: Session = Depends(get_db)) -> ApostadorV2Service:
     return ApostadorV2Service(get_apostador_service(db))
+
+
+def get_apostador_v4_service(db: Session = Depends(get_db)) -> ApostadorV4Service:
+    return ApostadorV4Service(ApostadorRepository(db), PrediccionRepository(db))
 
 
 def get_partido_service(db: Session = Depends(get_db)) -> PartidoService:

@@ -1,0 +1,47 @@
+name: Canary v4 · Revertir a la estable
+
+# Manual: devuelve todo el trafico a la revision estable (0 % canary, 100 %
+# estable). La base de datos no se toca: el canary solo agrego una columna que
+# admite NULL, asi que la estable sigue funcionando con los datos de siempre.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: project-3f57bb8c-371e-4b9c-949
+  REGION: us-central1
+  SERVICIO: statsnostra-api
+  CUENTA_CI: statsnostra-ci@project-3f57bb8c-371e-4b9c-949.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/599897195726/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+jobs:
+  revertir:
+    name: Dejar el 100 % en la estable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Autenticar con GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CUENTA_CI }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # La estable es la revision con la etiqueta "estable"
+      - name: Revertir
+        run: |
+          ESTABLE=$(gcloud run services describe $SERVICIO --region=$REGION --format=json \
+            | jq -r '.status.traffic[] | select(.tag=="estable") | .revisionName')
+          [ -n "$ESTABLE" ] || { echo "No hay una revisión con la etiqueta estable"; exit 1; }
+          gcloud run services update-traffic $SERVICIO --region=$REGION --to-revisions="$ESTABLE=100"
+          echo "### Revertido: 100 % en $ESTABLE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verificar con peticiones reales
+        run: |
+          URL=$(gcloud run services describe $SERVICIO --region=$REGION --format='value(status.url)')
+          for i in $(seq 1 20); do curl -fsS -D - -o /dev/null "$URL/health" | grep -i "^x-track"; done | sort | uniq -c
+          ! curl -fsS -D - -o /dev/null "$URL/health" | grep -qi "x-track: canary"

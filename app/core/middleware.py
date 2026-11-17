@@ -2,6 +2,9 @@ import uuid
 
 from app.core.trace import TRACE_ID_HEADER, trace_id_var
 
+VERSION_HEADER = "X-App-Version"
+TRACK_HEADER = "X-Track"
+
 
 class TraceIdMiddleware:
     """Propaga un identificador de correlacion (trace-id) por peticion.
@@ -68,3 +71,30 @@ class MetodoOverrideMiddleware:
                 scope["method"] = "QUERY"
 
         await self.app(scope, receive, send)
+
+
+class VersionMiddleware:
+    """X-App-Version y X-Track en todas las respuestas.
+
+    Con stable y canary al aire, es lo unico que dice quien respondio;
+    por eso van tambien en los 404 y en los errores.
+    """
+
+    def __init__(self, app, version: str, track: str) -> None:
+        self.app = app
+        self.cabeceras = [
+            (VERSION_HEADER.lower().encode(), version.encode()),
+            (TRACK_HEADER.lower().encode(), track.encode()),
+        ]
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_con_version(message):
+            if message["type"] == "http.response.start":
+                message["headers"].extend(self.cabeceras)
+            await send(message)
+
+        await self.app(scope, receive, send_con_version)
