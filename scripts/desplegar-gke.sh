@@ -92,6 +92,28 @@ envsubst < k8s/service.yaml | kubectl apply -f -
 kubectl apply -f k8s/hpa.yaml
 kubectl rollout status deployment/statsnostra-api --namespace "${NAMESPACE}" --timeout=300s
 
+paso "Aislamiento de red"
+# Denegación por defecto con permisos explícitos. Que la API responda con los pods de siempre no
+# prueba nada: lo que delata una regla que falta es un pod NUEVO (necesita DNS, metadatos, la API
+# de Cloud SQL y la base). Por eso se reinician los pods con las políticas puestas y se comprueba
+# la ruta que usa la base; si falla, se quitan y el despliegue falla en vez de dejar el servicio roto.
+kubectl apply -f k8s/networkpolicy.yaml
+kubectl rollout restart deployment/statsnostra-api --namespace "${NAMESPACE}"
+if ! kubectl rollout status deployment/statsnostra-api --namespace "${NAMESPACE}" --timeout=300s; then
+  echo "Los pods nuevos no quedaron listos con las NetworkPolicy; las quito." >&2
+  kubectl delete -f k8s/networkpolicy.yaml --ignore-not-found
+  exit 1
+fi
+sleep 15
+for _ in $(seq 1 10); do
+  codigo="$(curl -s -o /dev/null -m 20 -w '%{http_code}' "http://${LB_IP}/api/v1/partidos" || true)"
+  if [ "${codigo}" != 200 ]; then
+    echo "/api/v1/partidos dio ${codigo} con las NetworkPolicy puestas; las quito." >&2
+    kubectl delete -f k8s/networkpolicy.yaml --ignore-not-found
+    exit 1
+  fi
+done
+
 paso "Listo"
 kubectl get pods --namespace "${NAMESPACE}" -o wide
 echo "URL del API: http://${LB_IP}  (puede tardar un par de minutos en responder la primera vez)"
