@@ -45,12 +45,25 @@ su predicción una vez el partido finaliza.
   <img src="https://img.shields.io/badge/GitHub%20Actions-Promoci%C3%B3n%20por%20etapas-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
 </p>
 
-**GitHub Actions** aparece en todas: `pruebas.yml`/`produccion.yml` (v1 → Render), `despliegue-gke.yml` (v2 → GKE, retirado en la v3), `terraform-v3-despliegue.yml`/`terraform-v3-destruir.yml` (v3 → GKE con Terraform, retirados en la v4) y `canary-v4-desplegar.yml`/`canary-v4-promover.yml`/`canary-v4-revertir.yml` (v4 → Canary Deployment en Cloud Run).
+**v5**
+<p>
+  <img src="https://img.shields.io/badge/Chaos%20Toolkit-Experimentos-0A9EDC?style=for-the-badge" alt="Chaos Toolkit"/>
+  <img src="https://img.shields.io/badge/k6-Carga-7D64FF?style=for-the-badge&logo=k6&logoColor=white" alt="k6"/>
+  <img src="https://img.shields.io/badge/Kubernetes-GKE%20Dataplane%20V2-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/NetworkPolicy-Denegaci%C3%B3n%20por%20defecto-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="NetworkPolicy"/>
+  <img src="https://img.shields.io/badge/Grafana%20Cloud-Observabilidad-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana Cloud"/>
+  <img src="https://img.shields.io/badge/Pytest-123%20pruebas-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest"/>
+</p>
+
+**GitHub Actions** aparece en todas: `pruebas.yml`/`produccion.yml` (v1 → Render), `despliegue-gke.yml` (v2 → GKE, retirado en la v3), `terraform-v3-despliegue.yml`/`terraform-v3-destruir.yml` (v3 → GKE con Terraform, retirados en la v4) y `canary-v4-desplegar.yml`/`canary-v4-promover.yml`/`canary-v4-revertir.yml` (v4 → Canary Deployment en Cloud Run) y `desplegar-gke.yml` (v5 → GKE, desde la rama `v5`).
 
 ## 🔗 Enlaces en vivo
 
 | | Ambiente | URL |
 |---|---|---|
+| 💥 | **GKE (v5)** — API (mientras la infraestructura siga arriba) | [34.68.14.217](http://34.68.14.217) |
+| 📘 | **GKE (v5)** — Swagger | [34.68.14.217/docs](http://34.68.14.217/docs) |
+| 🧾 | **Informes, tablero y evidencia (v5)** | [`caos/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/caos) y [`seguridad/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/seguridad) |
 | 🐤 | **Cloud Run (v4)** — API estable (v1 + v2), con el canary conviviendo | [statsnostra-api-599897195726.us-central1.run.app](https://statsnostra-api-599897195726.us-central1.run.app) |
 | 📘 | **Cloud Run (v4)** — Swagger | [statsnostra-api-599897195726.us-central1.run.app/docs](https://statsnostra-api-599897195726.us-central1.run.app/docs) |
 | 🏗️ | **Infraestructura v4** — Terraform | [`terraform/`](terraform/) |
@@ -209,6 +222,89 @@ La v4 corre en Cloud Run y ya no necesita lo propio de Kubernetes: `gke.tf`,
 con GKE, sigue disponible en el tag [`v3.0.0`](https://github.com/MarianaPineda0/StatsNostra/tree/v3.0.0).
 Se conservan Cloud SQL, Artifact Registry y Secret Manager, que el canary también usa
 (carpeta [`terraform/`](terraform/)).
+
+## 💥 Ingeniería del caos y caos de seguridad (v5)
+
+La v5 no agrega funciones a la API: la pone a prueba. Sobre la API de la v2, corriendo en
+GKE, se inyectan fallas reales y se mide qué pasa antes y después de mejorarla. Es un trabajo
+de grupo con las otras dos APIs (trading-journal y ecommerce), con un solo perfil de carga
+(k6: 5, 15 y 30 usuarios, 60 s cada tramo) y un mismo trace id en las tres nubes.
+
+> 🌿 **Dónde está.** El código de la v5 vive en la rama [`v5`](https://github.com/MarianaPineda0/StatsNostra/tree/v5),
+> que nace de la v2: `main` conserva la línea v1 a v4. Las versiones son
+> [`v5.0.0`](https://github.com/MarianaPineda0/StatsNostra/releases/tag/v5.0.0) (DevOps),
+> [`v5.1.0`](https://github.com/MarianaPineda0/StatsNostra/releases/tag/v5.1.0) (seguridad) y
+> [`v5.1.1`](https://github.com/MarianaPineda0/StatsNostra/releases/tag/v5.1.1) (NetworkPolicy corregidas).
+
+### Ingeniería del caos (DevOps)
+
+Experimento de agotamiento de CPU de un pod, escrito como código con Chaos Toolkit. La hipótesis
+dice que, con un pod al 100 % de CPU durante 3 minutos, el flujo mantiene un éxito de al menos
+99 % y un p95 de a lo sumo 1.511 ms (el p95 del estado estable, 1.208 ms, más un 25 %).
+
+| | p95 del flujo | Éxito | Hipótesis |
+|---|---|---|---|
+| Estado estable | 1.208 ms | 100 % | referencia |
+| Ronda 0, sin mejoras | 3.425 ms | 100 % | se refuta |
+| Ronda 1, con mejoras | 774 ms | 100 % | se cumple |
+
+No hubo errores: el pod saturado respondía tarde. Las mejoras, solo de configuración, son una
+sonda de readiness que saca del balanceo al pod saturado, más CPU por pod (200m/500m) y un HPA
+de 2 a 4 réplicas.
+
+### Caos de seguridad (defensa en profundidad)
+
+Experimento 2, exposición y segmentación: aparece una ruta no declarada en el clúster (un
+Service que expone el puerto de administración, un salto entre namespaces y una salida a
+Internet sin filtro).
+
+| | Ronda 0 | Ronda 1 |
+|---|---|---|
+| Alerta del Service expuesto | no hubo | a los 45 s |
+| Contención desde la alerta | no hubo quién contuviera | 15 s |
+| Salto entre namespaces y salida a Internet | pasaron | bloqueados con NetworkPolicy |
+
+Además, una credencial señuelo que avisa a los 27 s si alguien la abre, y la cuenta de
+despliegue con mínimo privilegio (de 18 a 7 roles). Las reglas de detección son código con casos
+positivos y negativos.
+
+### Cómo se corre
+
+```bash
+# Estado estable, una ronda del experimento de CPU y su veredicto (ver caos/README.md)
+chaos run --rollback-strategy always --journal-path caos/evidencia/ronda-0/journal.json caos/experimentos/03-agotamiento.json
+# Experimento de exposición y segmentación (ver seguridad/README.md)
+bash seguridad/acciones/exposicion.sh ronda 0
+```
+
+Todo se corre desde la rama `v5`, y solo con una ventana acordada con el resto del grupo.
+
+### Tablero e informes
+
+- 📈 Tablero de las dos rondas: [`caos/tablero/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/caos/tablero)
+- 📄 Informe de caos: [`caos/informe/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/caos/informe)
+- 🔒 Informe de seguridad: [`seguridad/informe/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/seguridad/informe)
+- 🧾 Evidencia de cada ronda: [`caos/evidencia/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/caos/evidencia) y [`seguridad/evidencia/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/seguridad/evidencia)
+
+### Qué cambia respecto a la v2
+
+- Interruptor de fallos `X-Inject-Fault` (apagado por defecto), `X-App-Name` y un log JSON por petición.
+- Sondas de liveness y de readiness en rutas distintas, con readiness por saturación.
+- Infraestructura con Terraform en un clúster nuevo, con Dataplane V2.
+- Métricas a Grafana Cloud con su propio `service.name` (`statsnostra-api`).
+- NetworkPolicy de denegación por defecto, que aplica el despliegue y quita si un pod nuevo no arranca.
+
+### Servicios de GCP usados (v5)
+
+| Servicio | Creado con | Para qué |
+|---|---|---|
+| **GKE (Dataplane V2)** | `gke.tf` | Corre la API con 2 a 4 réplicas, HPA y NetworkPolicy |
+| **Cloud SQL (PostgreSQL)** | `cloudsql.tf` | Base de datos, sin redes autorizadas: solo entra el Cloud SQL Auth Proxy |
+| **Artifact Registry** | `artifact_registry.tf` | Imágenes de la API |
+| **Secret Manager** | `secretos.tf` y a mano | Contraseña y URL de la base, y el token de Grafana |
+| **Cloud Monitoring, Logging y Pub/Sub** | `network.tf`, `seguridad/mejoras/` | Registros de flujo y de auditoría, alertas y su notificación |
+| **IAM y Workload Identity Federation** | `cuentas.tf` y a mano | Cuenta de los nodos y cuenta de despliegue con mínimo privilegio, sin llaves |
+| **Cloud Storage** | a mano (una vez) | Estado remoto de Terraform, versionado |
 
 ## ☸️ Arquitectura multicloud
 
@@ -422,7 +518,8 @@ arquitectura multicloud junto con otras dos APIs del curso
 (`trading-journal` en OCI/Azure, `ecommerce` en AWS) — esta API corre en
 GKE (GCP), consume entidades reales de las otras dos en tiempo real,
 propaga un trace-id entre las tres nubes, y agrega caché distribuida,
-observabilidad y un pipeline de despliegue automático a Kubernetes.
+observabilidad y un pipeline de despliegue automático a Kubernetes. `v5` pone a prueba esa API en
+GKE con ingeniería del caos y caos de seguridad, junto con las otras dos APIs.
 
 ## 🏗️ Arquitectura
 
@@ -707,4 +804,5 @@ Detalle completo de la infraestructura en [`docs/render.md`](docs/render.md).
 - 🚀 [`docs/ci-cd.md`](docs/ci-cd.md)
 - ☁️ [`docs/render.md`](docs/render.md)
 - 🧪 [`docs/pruebas.md`](docs/pruebas.md)
+- 💥 [`caos/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/caos) y [`seguridad/`](https://github.com/MarianaPineda0/StatsNostra/tree/v5/seguridad) (rama `v5`) — experimentos, evidencia, tablero e informes
 - 🐤 [`canary/`](canary/) — umbrales SLO, puerta de calidad, promoción por etapas y generador de carga
