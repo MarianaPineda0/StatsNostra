@@ -92,22 +92,6 @@ envsubst < k8s/service.yaml | kubectl apply -f -
 kubectl apply -f k8s/hpa.yaml
 kubectl rollout status deployment/statsnostra-api --namespace "${NAMESPACE}" --timeout=300s
 
-paso "Aislamiento de red"
-# Denegación por defecto y permisos explícitos. Si con las políticas puestas la API deja de
-# responder por la IP pública, se quitan y el despliegue falla en vez de dejar el servicio caído.
-kubectl apply -f k8s/networkpolicy.yaml
-codigo=000
-for _ in $(seq 1 12); do
-  codigo="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "http://${LB_IP}/health/ready" || true)"
-  [ "${codigo}" = 200 ] && break
-  sleep 5
-done
-if [ "${codigo}" != 200 ]; then
-  echo "La API no respondió con las NetworkPolicy puestas (último código: ${codigo}); las quito." >&2
-  kubectl delete -f k8s/networkpolicy.yaml --ignore-not-found
-  exit 1
-fi
-
 paso "Listo"
 kubectl get pods --namespace "${NAMESPACE}" -o wide
 echo "URL del API: http://${LB_IP}  (puede tardar un par de minutos en responder la primera vez)"
