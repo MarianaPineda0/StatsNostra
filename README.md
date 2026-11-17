@@ -7,14 +7,16 @@ Esta rama (`v5`) parte de la versión 2 de la API y corre en Google Cloud sobre 
 Sirve de base para los experimentos de caos del grupo: ingeniería del caos (DevOps) y caos de
 seguridad (defensa en profundidad).
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Cloud%20SQL-4169E1?logo=postgresql&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-GKE-326CE5?logo=kubernetes&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white)
-![Chaos Toolkit](https://img.shields.io/badge/Chaos%20Toolkit-experimentos-0A9EDC)
-![k6](https://img.shields.io/badge/k6-carga-7D64FF?logo=k6&logoColor=white)
-![Pruebas](https://img.shields.io/badge/pruebas-107-2ea44f)
+**v5**
+<p>
+  <img src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud"/>
+  <img src="https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform&logoColor=white" alt="Terraform"/>
+  <img src="https://img.shields.io/badge/Chaos%20Toolkit-Experimentos-0A9EDC?style=for-the-badge" alt="Chaos Toolkit"/>
+  <img src="https://img.shields.io/badge/k6-Carga-7D64FF?style=for-the-badge&logo=k6&logoColor=white" alt="k6"/>
+  <img src="https://img.shields.io/badge/Grafana%20Cloud-Observabilidad-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana Cloud"/>
+  <img src="https://img.shields.io/badge/Pytest-107%20pruebas-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest"/>
+</p>
 
 ## Las tres APIs del grupo
 
