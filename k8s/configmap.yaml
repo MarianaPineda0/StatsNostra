@@ -19,9 +19,10 @@ data:
   FAULT_LATENCY_MS: "1000"
 
   # Readiness que saca del balanceo a un pod saturado: milisegundos de retraso
-  # del bucle de eventos a partir de los cuales /health/ready responde 503. En 0
-  # está apagada (ronda 0); la ronda 1 la enciende con el umbral medido.
-  READINESS_LAG_MS: "0"
+  # del bucle de eventos a partir de los cuales /health/ready responde 503. 0 la
+  # apaga (como en la ronda 0); 50 es el umbral medido en la ronda 0: el pod saturado
+  # lo superó en 27 de 36 muestras y el sano en 2 de 36.
+  READINESS_LAG_MS: "50"
 
   # El flujo del grupo entra por el coordinador y este API no llama a las
   # otras nubes: sin URL el cliente externo simplemente no las consulta.
@@ -30,6 +31,9 @@ data:
   ECOMMERCE_API_URL: ""
   REDIS_HOST: ""
 
-  # Nombre propio en las métricas de Grafana Cloud (el endpoint y el token van
-  # en el Secret, y sin ellos OpenTelemetry queda apagado)
-  OTEL_SERVICE_NAME: "api-mari"
+  # Grafana Cloud: nombre propio en las métricas. El endpoint y el usuario los pone el
+  # despliegue solo si encuentra el token en Secret Manager; vacíos, OpenTelemetry queda
+  # apagado. El token va en el Secret, no aquí.
+  OTEL_SERVICE_NAME: "statsnostra-api"
+  GRAFANA_OTLP_ENDPOINT: "${GRAFANA_OTLP_ENDPOINT}"
+  GRAFANA_OTLP_USER: "${GRAFANA_OTLP_USER}"

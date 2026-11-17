@@ -1,0 +1,32 @@
+# Mejoras de la ronda 1 del experimento de agotamiento de CPU (parche del Deployment).
+# La ronda 0 se midió con los valores de recursos-y-sondas-base.yaml.
+#
+# Qué cambia y por qué, con los datos de la ronda 0 (caos/evidencia/ronda-0):
+#  - CPU: en estado estable cada pod ya llegaba a ~310m con un límite de 250m, así que
+#    no tenía holgura y un pod con un hilo quemando CPU atendía su mitad del tráfico
+#    con p95 de 3425 ms. Se sube el request a 200m y el límite a 500m.
+#  - Sonda de readiness: se revisa cada 5 s y se retira del balanceo tras 2 fallos
+#    seguidos (10 s), en vez de los 30 s de antes. El umbral de retraso del bucle
+#    (READINESS_LAG_MS=50) sale de la ronda 0: el pod saturado superó 50 ms en 27 de
+#    36 muestras y el sano solo en 2 de 36.
+#
+# Se aplica con caos/acciones/mejoras.sh aplicar (el ConfigMap y el HPA van en el script).
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2

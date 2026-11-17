@@ -1,62 +1,40 @@
-# 🚀 CI/CD
+# CI/CD
 
-## 🧰 Herramienta
+Se usa GitHub Actions. En esta rama hay dos pipelines que importan.
 
-Se usa **GitHub Actions** como herramienta SaaS de CI/CD (integrada directo
-en el repositorio, sin necesidad de configurar un servicio externo).
-
-## 🔀 Dos pipelines independientes
-
-| Pipeline | Archivo | Se dispara con |
+| Pipeline | Archivo | Cuándo corre |
 |---|---|---|
-| Pruebas | `.github/workflows/pruebas.yml` | push a `develop` |
-| Producción | `.github/workflows/produccion.yml` | push a `main` |
+| Pruebas | `.github/workflows/pruebas.yml` | push a `v5-develop` y pull requests hacia `v5` |
+| Despliegue a GKE | `.github/workflows/desplegar-gke.yml` | push a `v5` que cambie `app/`, `migrations/`, `k8s/`, `Dockerfile`, `requirements.txt`, `alembic.ini` o `scripts/desplegar-gke.sh`, o a mano |
 
-Ambos pipelines tienen exactamente la misma estructura (build, PostgreSQL
-efímero de CI, migraciones, pruebas, lint, deploy) — la única diferencia es
-la rama que los dispara y el Deploy Hook de destino
-(`RENDER_DEPLOY_HOOK_PRUEBAS` vs `RENDER_DEPLOY_HOOK_PRODUCCION`). Ninguno
-de los dos exige un mínimo de cobertura — ese gate se quitó, no es un
-requisito de esta entrega.
+(`produccion.yml` es de la línea v1 a v4 y solo se dispara con `main`.)
 
-## 📝 Qué hace el pipeline de Pruebas, paso a paso
+## Pruebas
 
-1️⃣ **Checkout** del código del repositorio.
-2️⃣ **Configura Python** 3.12.
-3️⃣ **Build / instalación de dependencias** (`pip install -r requirements-dev.txt`).
-4️⃣ **Levanta un PostgreSQL efímero**, exclusivo de esa ejecución del pipeline
-   (no es ni tu Postgres local ni el de Render — se crea al iniciar el
-   pipeline y se destruye al terminar).
-5️⃣ **Aplica las migraciones** de Alembic sobre ese Postgres temporal.
-6️⃣ **Corre las pruebas automatizadas con `pytest`** — si algún test falla,
-   este paso falla.
-7️⃣ **Lint** (`ruff check .`) y **formato** (`black --check .`).
-8️⃣ **Despliega a Render**, pero **solo si todos los pasos anteriores
-   pasaron**.
+1. Instala las dependencias de Python 3.12.
+2. Levanta un PostgreSQL efímero para esa ejecución y aplica las migraciones de Alembic.
+3. Corre `pytest` (107 pruebas, contra la base real).
+4. Revisa el código con `ruff check .` y el formato con `black --check .`.
 
-Este pipeline no construye ninguna imagen: eso lo hace Render directamente
-a partir del `Dockerfile` cuando recibe el Deploy Hook.
+Si cualquier paso falla, el pipeline falla y el PR no se puede fusionar.
 
-## 🚧 Cómo se bloquea el despliegue si algo falla
+## Despliegue
 
-El pipeline está dividido en dos *jobs*: `test` y `deploy`. El job `deploy`
-tiene la directiva `needs: test` — en GitHub Actions, esto significa que
-`deploy` **no se ejecuta en absoluto** si `test` termina en error. No es una
-validación manual ni una condición que alguien pueda saltarse: es una regla
-estructural del pipeline.
+El workflow hace lo mismo que `scripts/desplegar-gke.sh`, para que haya una sola forma de
+desplegar:
 
-## 🔗 Cómo se conecta con Render
+1. Se autentica en Google Cloud con Workload Identity Federation, sin llaves guardadas.
+2. Construye la imagen y la sube a Artifact Registry.
+3. Ejecuta el Job de migración de Alembic y espera a que termine.
+4. Aplica los manifiestos de `k8s/` (ConfigMap, Deployment, Service y HPA) y espera el rollout.
+5. Hace una prueba de humo por la IP pública: espera un 200 en `/health/ready`, consulta
+   `/api/v1/partidos` y `/api/v1/predicciones` y comprueba la cabecera `X-App-Name`.
 
-El despliegue se dispara llamando a un **Deploy Hook** (una URL privada que
-Render genera por servicio). Esa URL se guarda como un **GitHub Secret**
-(`RENDER_DEPLOY_HOOK_PRUEBAS`), nunca como texto plano en el repositorio —
-el workflow la referencia como `${{ secrets.RENDER_DEPLOY_HOOK_PRUEBAS }}`,
-así que ni siquiera aparece en los logs del pipeline.
+Un merge a `v5` que cambie esos archivos reinicia los pods. Si otra API del grupo está midiendo
+con carga en ese momento, conviene avisarles antes de fusionar.
 
-## ✅ Estado de validación
+## Flujo de ramas
 
-- ✅ Pipeline de Pruebas: validado con una ejecución real, incluyendo la
-  prueba deliberada de que un test fallido bloquea el despliegue (ver
-  `docs/pruebas.md`).
-- ✅ Pipeline de Producción: mismo mecanismo de bloqueo (`needs: test`),
-  aplicado sobre `main`.
+`v5-develop` es la rama de trabajo; cada cambio llega a `v5` por pull request con las pruebas en
+verde. Los commits usan GitMoji y las versiones siguen SemVer: `v5.0.0` para el experimento de
+DevOps y `v5.1.0` para el de seguridad.

@@ -7,8 +7,7 @@ class Settings(BaseSettings):
     """Configuracion de la app, leida de variables de entorno (o .env local).
 
     Los valores por defecto de abajo son solo para desarrollo local con
-    Docker Compose; en Render se sobreescriben con las variables de entorno
-    reales de cada servicio (ver docs/render.md).
+    Docker Compose; en GKE los fija el ConfigMap y el Secret de k8s/.
     """
 
     app_name: str = "StatsNostra"

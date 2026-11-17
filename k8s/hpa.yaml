@@ -1,0 +1,23 @@
+# Autoescalado del API por CPU, de 2 a 4 réplicas. Nació como mejora de la ronda 1 del
+# experimento de agotamiento de CPU y ahora lo aplica el despliegue normal.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: statsnostra-api-hpa
+  namespace: statsnostra
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: statsnostra-api
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Se mide contra el request (200m en la ronda 1): al 60 % son 120m por pod,
+          # así que escala antes de que el pod llegue a su límite de 500m
+          averageUtilization: 60

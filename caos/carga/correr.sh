@@ -17,6 +17,12 @@ BASE_URL="${BASE_URL:-https://api-coordinador.jollybeach-fbb8b9ad.eastus.azureco
 TRADE_ID="${TRADE_ID:-5540}"
 PERFIL="${PERFIL:-caos/carga/perfil.js}"
 
+# Sin perfil no hay medición: se avisa antes de reservar la ventana y no a mitad de ella
+if [ ! -f "$PERFIL" ]; then
+  echo "No existe el perfil de carga: $PERFIL" >&2
+  exit 2
+fi
+
 mkdir -p "$CARPETA"
 
 # Si alguien más está mandando carga, esta corrida no mediría solo lo que se quiere

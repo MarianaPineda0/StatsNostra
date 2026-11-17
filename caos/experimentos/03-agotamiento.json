@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "title": "Agotamiento de CPU de un pod del API de Mari en GKE",
-  "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API de Mari llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= 1511 ms. 1511 ms es el p95 del estado estable medido (1208 ms) más un 25 % de margen.",
-  "tags": ["devops", "cpu", "agotamiento", "mari", "gke"],
+  "title": "Agotamiento de CPU de un pod de la API StatsNostra en GKE",
+  "description": "Dado el perfil de carga P (k6: 5, 15 y 30 usuarios de 60 s cada uno), cuando la CPU de un pod de la API StatsNostra llegue al 100 % durante 3 minutos, el flujo mantendrá una tasa de éxito >= 99 % y un p95 <= 1511 ms. 1511 ms es el p95 del estado estable medido (1208 ms) más un 25 % de margen.",
+  "tags": ["devops", "cpu", "agotamiento", "statsnostra", "gke"],
   "configuration": {
     "url_api": "http://34.68.14.217",
     "segundos_de_consumo": "180",
@@ -10,7 +10,7 @@
     "p95_maximo_ms": "1511"
   },
   "steady-state-hypothesis": {
-    "title": "La API está disponible y con sus dos réplicas listas",
+    "title": "La API está disponible y con al menos sus dos réplicas listas",
     "probes": [
       {
         "type": "probe",
@@ -24,8 +24,8 @@
       },
       {
         "type": "probe",
-        "name": "las-dos-replicas-estan-listas",
-        "tolerance": "2",
+        "name": "al-menos-dos-replicas-estan-listas",
+        "tolerance": {"type": "regex", "pattern": "^[2-4]$", "target": "stdout"},
         "provider": {
           "type": "process",
           "path": "kubectl",
@@ -132,7 +132,7 @@
   "extensions": [
     {
       "name": "metadatos",
-      "integrante": "Mari",
+      "api": "StatsNostra",
       "nube": "Google Cloud (GKE)",
       "metrica_objetivo": "Latencia p95 del flujo y tasa de éxito, medidas con k6",
       "instrumento": "k6 (perfil fijo), kubectl top y el retraso del bucle de cada pod (/metrics)",
@@ -141,7 +141,7 @@
       "x_se_fija_con": "mediana del p95 de 3 corridas de estado estable más un 25 %",
       "estado_estable": "caos/evidencia/estado-estable/estado-estable.json",
       "evidencia_de_la_ronda": "journal.json, corrida-1.json, lag-pods.csv y cpu-pods.txt en la carpeta de la ronda",
-      "radio_de_impacto": "un solo pod del API de Mari (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
+      "radio_de_impacto": "un solo pod de la API StatsNostra (statsnostra-api); la otra réplica no se toca; tráfico sintético de k6",
       "duracion_minutos": 3,
       "condiciones_de_aborto": [
         "éxito del flujo < 50 %",
