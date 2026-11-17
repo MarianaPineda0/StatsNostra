@@ -15,7 +15,7 @@ seguridad (defensa en profundidad).
   <img src="https://img.shields.io/badge/Chaos%20Toolkit-Experimentos-0A9EDC?style=for-the-badge" alt="Chaos Toolkit"/>
   <img src="https://img.shields.io/badge/k6-Carga-7D64FF?style=for-the-badge&logo=k6&logoColor=white" alt="k6"/>
   <img src="https://img.shields.io/badge/Grafana%20Cloud-Observabilidad-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana Cloud"/>
-  <img src="https://img.shields.io/badge/Pytest-107%20pruebas-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest"/>
+  <img src="https://img.shields.io/badge/Pytest-123%20pruebas-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest"/>
 </p>
 
 ## Las tres APIs del grupo
